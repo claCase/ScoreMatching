@@ -132,7 +132,7 @@ class EBMSlicedScoreMatching(Model):
                 e = self.f(inputs)
             grad = tape1.gradient(e, inputs)
         hess = tape.batch_jacobian(grad, inputs)
-        return e, grad, hess
+        return -e, grad, hess
 
     def sliced_score_estimator(self, data):
         e, grad, hess = self(data, training=True)
