@@ -2,6 +2,7 @@ import os
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib import animation
 import tensorflow as tf
 import numpy as np
 from numpy.random import choice
@@ -16,6 +17,8 @@ from tensorflow_probability.python.distributions import (MultivariateNormalTriL,
                                                          MultivariateNormalDiag)
 
 # from tensorflow_probability.python.layers import DistributionLambda
+from datetime import datetime
+
 plt.rc('text', usetex=True)
 plt.rc('text.latex', preamble=r'\usepackage{amsmath} \usepackage{amssymb}')
 
@@ -57,21 +60,35 @@ def make_cross_shaped_distribution(n_samples):
     return mix.sample(n_samples).numpy()
 
 
-def make_grad_plot(model, x_lim=(-5, 5), y_lim=(-5, 5), num=50, ax=None, fig=None, iter=None):
-    xx, yy, xy = make_base_points(x_lim, y_lim, num)
-    o = model(xy)
-    if len(o) == 1:
-        grad = o
-        e = None
-        title = "Estimated Vector Field of the Probability Distribution $ \\mathbb{\\hat{{P}}} $ : $ \\nabla_{x} \\mathbb{\\hat{{P}}}(x) $"
-    elif len(o) == 3:
-        e, grad, hess = o
-        ee = e.numpy().reshape(num, num)
+def make_grad_plot(model=None, x_lim=(-5, 5), y_lim=(-5, 5), num=50, reduce=10, ax=None, fig=None, iter=None,
+                   grad=None, e=None, xy=None):
+    assert model is not None or (grad is not None and xy is not None)
+    if model is not None:
+        xx, yy, xy = make_base_points(x_lim, y_lim, num)
+        o = model(xy)
+        if len(o) == 1:
+            grad = o.numpy()
+            e = None
+        elif len(o) == 3:
+            e, grad, hess = o
+            e, grad, hess = e.numpy(), grad.numpy(), hess.numpy()
+    else:
+        if isinstance(grad, tf.Tensor):
+            grad = grad.numpy()
+        num = int(np.sqrt(xy.shape[0]))
+        assert num**2 == xy.shape[0]
+        xx, yy = np.split(xy, 2, -1)
+        xx, yy = np.reshape(xx, (num, num)), np.reshape(yy, (num, num))
+    if e is not None:
         title = "Estimated Vector Field of the Estimated Energy Model $ \\mathbb{\\hat{{E}}} $ : $ \\nabla_{x} \\mathbb{\\hat{{E}}}(x) $"
+        ee = e.reshape(num, num)
+    else:
+        title = "Estimated Vector Field of the Probability Distribution $ \\mathbb{\\hat{{P}}} $ : $ \\nabla_{x} \\mathbb{\\hat{{P}}}(x) $"
+
     if iter is not None:
         title += f" at Iteration {iter}"
     assert grad.shape[-1] == 2
-    dxx, dyy = np.split(grad.numpy(), 2, -1)
+    dxx, dyy = np.split(grad, 2, -1)
     dxx, dyy = dxx.reshape(num, num), dyy.reshape(num, num)
     if ax is None:
         fig, ax = plt.subplots(1)
@@ -84,7 +101,7 @@ def make_grad_plot(model, x_lim=(-5, 5), y_lim=(-5, 5), num=50, ax=None, fig=Non
             divider = make_axes_locatable(ax)
             cax1 = divider.append_axes("right", size="5%", pad=0.05)
             fig.colorbar(img, cax=cax1, orientation="vertical")
-    ax.quiver(xx, yy, dxx, dyy)
+    ax.quiver(xx[::reduce, ::reduce], yy[::reduce, ::reduce], dxx[::reduce, ::reduce], dyy[::reduce, ::reduce])
     return ax
 
 
@@ -110,3 +127,73 @@ def make_distribution_grad_plot(distr, x_lim=(-5, 5), y_lim=(-5, 5), num=200, re
         fig.colorbar(img, cax=cax1, orientation="vertical")
         return fig, ax
     return ax
+
+
+def save_output(model, inputs, save_path, name="default", every=5):
+    now = datetime.now().isoformat()[:-7].replace(":", "_")
+    save_path = os.path.join(save_path, now)
+    os.makedirs(save_path)
+    if isinstance(inputs, tf.Tensor):
+        inputs = inputs.numpy()
+    np.save(os.path.join(save_path, "inputs.npy"), inputs)
+
+    def on_epoch_end(epoch, logs):
+        if not epoch % every:
+            o = model(inputs)
+            if len(o) == 1:
+                e, grad, hess = None, o, None
+            elif len(o) == 3:
+                e, grad, hess = o
+            else:
+                raise NotImplementedError
+
+            if e is not None:
+                e = e.numpy()
+                np.save(os.path.join(save_path, str(epoch) + "_" + name + "_energy.npy"), e)
+            if hess is not None:
+                hess = hess.numpy()
+                np.save(os.path.join(save_path, str(epoch) + "_" + name + "_hessian.npy"), hess)
+            np.save(os.path.join(save_path, str(epoch) + "_" + name + "_grad.npy"), grad)
+
+    return on_epoch_end, save_path
+
+
+def make_save_callback(model, inputs, save_path, name="default"):
+    callback, save_path = save_output(model, inputs, save_path, name)
+    return tf.keras.callbacks.LambdaCallback(on_epoch_end=callback), save_path
+
+
+def make_training_animation(save_path, dpi=250, fps=60):
+    path, dirs, files = next(os.walk(save_path))
+    epochs = set()
+    types = set()
+    names = set()
+    for i in files:
+        if i != "inputs.npy":
+            try:
+                splits = i.split("_")
+                k = int(splits[0])
+                obj = splits[-1].split(".")[0]
+                epochs.update({k})
+                types.update({obj})
+                name = splits[1]
+                names.update({name})
+            except:
+                pass
+    epochs = list(epochs)
+    epochs.sort()
+    inputs = np.load(os.path.join(save_path, "inputs.npy"))
+    fig, ax = plt.subplots(1, figsize=(15, 15))
+
+    def plotter_grad(i):
+        print(i)
+        ax.clear()
+        grad = np.load(os.path.join(save_path, str(epochs[i]) + "_" + name + "_grad.npy"))
+        if "energy" in types:
+            energy = np.load(os.path.join(save_path, str(epochs[i]) + "_" + name + "_energy.npy"))
+        else:
+            energy = None
+        make_grad_plot(grad=grad, e=energy, xy=inputs, ax=ax, iter=i)
+
+    anim = animation.FuncAnimation(fig, plotter_grad, frames=len(epochs)-1)
+    anim.save(os.path.join(save_path, "animation.gif"), fps=fps, dpi=dpi)
