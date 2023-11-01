@@ -1,5 +1,6 @@
 import tensorflow as tf
 from typing import List, Tuple
+from src.losses import score_loss
 
 k = tf.keras
 Model = k.models.Model
@@ -16,12 +17,18 @@ class SlicedScoreMatching(Model):
                  hidden_layers: Tuple[int, ...] = (100, 50),
                  output_dim: int = 2,
                  activation: str = "relu",
+                 vr=False,
                  **kwargs):
         super().__init__(**kwargs)
         self.loss_tracker = tf.keras.metrics.Mean(name="score")
         self.f = self.make_score_model(hidden_layers=hidden_layers,
                                        activation=activation,
                                        output_dim=output_dim)
+        self.vr = vr
+
+    def build(self, input_shape):
+        super().build()
+        self.f.build(input_shape)
 
     def call(self, inputs, training=False, mask=None):
         if training:
@@ -32,28 +39,10 @@ class SlicedScoreMatching(Model):
             return grad, hess
         return self.f(inputs)
 
-    @staticmethod
-    def sliced_score_estimator(grad, hess):
-        rnd = tf.random.normal(shape=tf.shape(hess)[:2])
-        sliced_hess = 0.5 * tf.einsum("bi,bio,bo->b", rnd, hess, rnd)  # eq. 8 trace estimator
-        sliced_grad = 0.5 * tf.einsum("bi,bi->b", rnd, grad) ** 2  # # eq. 8 trace estimator
-        return sliced_hess + sliced_grad
-    @staticmethod
-    def sliced_score_estimator_vr(grad, hess):
-        rnd = tf.random.normal(shape=tf.shape(hess)[:2])
-        sliced_hess = 0.5 * tf.einsum("bi,bio,bo->b", rnd, hess, rnd)  # eq. 8 trace estimator
-        sliced_grad = tf.linalg.norm(grad, -1)
-        return sliced_hess + sliced_grad
-
-    def loss_fn(self, grad, hess, vr=False):
-        if vr:
-            return tf.reduce_mean(self.sliced_score_estimator_vr(grad, hess))
-        return tf.reduce_mean(self.sliced_score_estimator(grad, hess))
-
     def train_step(self, data):
         with tf.GradientTape() as tape:
             grad, hess = self(data, training=True)
-            loss = self.loss_fn(grad, hess)
+            loss = score_loss(grad, hess, vr=self.vr)
         grads = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
         self.loss_tracker.update_state(loss)
@@ -115,8 +104,7 @@ class SlicedScoreMatching(Model):
         return Model(i, o)
 
 
-
-class EBMSlicedScoreMatching(Model):
+class EBMSlicedScoreMatching(SlicedScoreMatching):
     """
     https://proceedings.mlr.press/v115/song20a.html
     Sliced Score Matching: A Scalable Approach to Density and Score Estimation
@@ -126,12 +114,14 @@ class EBMSlicedScoreMatching(Model):
                  hidden_layers: Tuple[int, ...] = (100, 50),
                  output_dim: int = 2,
                  activation: str = "relu",
+                 vr=False,
                  **kwargs):
         super().__init__(**kwargs)
         self.loss_tracker = tf.keras.metrics.Mean(name="score")
         self.f = self.make_score_model(hidden_layers=hidden_layers,
                                        activation=activation,
                                        output_dim=output_dim)
+        self.vr = vr
 
     def call(self, inputs, training=False, mask=None):
         with tf.GradientTape() as tape:
@@ -145,75 +135,14 @@ class EBMSlicedScoreMatching(Model):
         else:
             return grad
 
-    @staticmethod
-    def sliced_score_estimator(grad, hess):
-        rnd = tf.random.normal(shape=tf.shape(hess)[:2])
-        sliced_hess = 0.5 * tf.einsum("bi,bio,bo->b", rnd, hess, rnd)  # eq. 8 trace estimator
-        sliced_grad = 0.5 * tf.einsum("bi,bi->b", rnd, grad) ** 2  # # eq. 8 trace estimator
-        return sliced_hess + sliced_grad
-
-    @staticmethod
-    def sliced_score_estimator_vr(grad, hess):
-        rnd = tf.random.normal(shape=tf.shape(hess)[:2])
-        sliced_hess = 0.5 * tf.einsum("bi,bio,bo->b", rnd, hess, rnd)  # eq. 8 trace estimator
-        sliced_grad = tf.linalg.norm(grad, -1)
-        return sliced_hess + sliced_grad
-
-    def loss_fn(self, grad, hess, vr=False):
-        if vr:
-            return tf.reduce_mean(self.sliced_score_estimator_vr(grad, hess))
-        return tf.reduce_mean(self.sliced_score_estimator(grad, hess))
-
     def train_step(self, data):
         with tf.GradientTape() as tape:
             e, grad, hess = self(data, training=True)
-            loss = self.loss_fn(grad, hess)
+            loss = self.loss_fn(grad, hess, vr=self.vr)
         grads = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
         self.loss_tracker.update_state(loss)
         return {"Score": self.loss_tracker.result()}
-
-    def langevin_dynamics(self, initial_points=None, steps=500):
-        try:
-            out_dim = self.layers[-1].output_shape[-1]
-        except AttributeError as e:
-            raise e
-        except RuntimeError as e:
-            raise e
-
-        def alpha(i):
-            return 100 / (100 + i)
-
-        if initial_points is None:
-            x = tf.random.normal(shape=(1000, out_dim))
-        else:
-            x = initial_points
-
-        for t in range(steps):
-            a = alpha(t)
-            x = x + 0.5 * a * self.f(x) + tf.math.sqrt(a) * tf.random.normal(shape=(1, out_dim))
-        return x
-
-    def annealed_langevin_dynamics(self, initial_points=None, steps=500, sigma_high=2, sigma_low=0.1, levels=10, e=1.):
-        try:
-            out_dim = self.layers[-1].output_shape[-1]
-        except AttributeError as e:
-            raise e
-        except RuntimeError as e:
-            raise e
-
-        alphas = tf.linspace(sigma_low, sigma_high, levels)[::-1]
-
-        if initial_points is None:
-            x = tf.random.normal(shape=(1000, out_dim))
-        else:
-            x = initial_points
-
-        for l in range(len(alphas) - 1):
-            a = e * alphas[l + 1] / alphas[l]
-            for t in range(steps):
-                x = x + 0.5 * a * self.f(x) + tf.math.sqrt(a) * tf.random.normal(shape=(1, out_dim))
-        return x
 
     @staticmethod
     def make_score_model(hidden_layers, activation, output_dim):
