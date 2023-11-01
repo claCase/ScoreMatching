@@ -3,7 +3,7 @@ from typing import List, Tuple
 from src.losses import score_loss
 
 k = tf.keras
-Model = k.models.Model
+Model, Sequential = k.models.Model, k.models.Sequential
 Dense = k.layers.Dense
 
 
@@ -18,16 +18,21 @@ class SlicedScoreMatching(Model):
                  output_dim: int = 2,
                  activation: str = "relu",
                  vr=False,
+                 noise_type="gaussian",
                  **kwargs):
         super().__init__(**kwargs)
         self.loss_tracker = tf.keras.metrics.Mean(name="score")
-        self.f = self.make_score_model(hidden_layers=hidden_layers,
-                                       activation=activation,
-                                       output_dim=output_dim)
+        self.hidden_layers = hidden_layers
+        self.activation = activation
+        self.output_dim = output_dim
         self.vr = vr
+        self.noise_type = noise_type
 
     def build(self, input_shape):
-        super().build()
+        super().build(input_shape)
+        self.f = self.make_score_model(hidden_layers=self.hidden_layers,
+                                       activation=self.activation,
+                                       output_dim=self.output_dim)
         self.f.build(input_shape)
 
     def call(self, inputs, training=False, mask=None):
@@ -42,7 +47,7 @@ class SlicedScoreMatching(Model):
     def train_step(self, data):
         with tf.GradientTape() as tape:
             grad, hess = self(data, training=True)
-            loss = score_loss(grad, hess, vr=self.vr)
+            loss = score_loss(grad, hess, vr=self.vr, noise_type=self.noise_type)
         grads = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
         self.loss_tracker.update_state(loss)
@@ -112,16 +117,18 @@ class EBMSlicedScoreMatching(SlicedScoreMatching):
 
     def __init__(self,
                  hidden_layers: Tuple[int, ...] = (100, 50),
-                 output_dim: int = 2,
                  activation: str = "relu",
                  vr=False,
+                 noise_type="gaussian",
                  **kwargs):
-        super().__init__(**kwargs)
-        self.loss_tracker = tf.keras.metrics.Mean(name="score")
-        self.f = self.make_score_model(hidden_layers=hidden_layers,
-                                       activation=activation,
-                                       output_dim=output_dim)
-        self.vr = vr
+        super().__init__(output_dim=1, noise_type=noise_type, vr=vr, **kwargs)
+        self.f = self.make_score_model(hidden_layers=hidden_layers, activation=activation)
+
+    def build(self, input_shape):
+        super(Model, self).build(input_shape)
+        self.f = self.make_score_model(hidden_layers=self.hidden_layers,
+                                       activation=self.activation)
+        self.f.build(input_shape)
 
     def call(self, inputs, training=False, mask=None):
         with tf.GradientTape() as tape:
@@ -138,21 +145,16 @@ class EBMSlicedScoreMatching(SlicedScoreMatching):
     def train_step(self, data):
         with tf.GradientTape() as tape:
             e, grad, hess = self(data, training=True)
-            loss = self.loss_fn(grad, hess, vr=self.vr)
+            loss = score_loss(grad, hess, vr=self.vr, noise_type=self.noise_type)
         grads = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
         self.loss_tracker.update_state(loss)
         return {"Score": self.loss_tracker.result()}
 
     @staticmethod
-    def make_score_model(hidden_layers, activation, output_dim):
-        i = tf.keras.layers.Input(shape=(output_dim,))
-        for k, h in enumerate(hidden_layers):
-            l = Dense(h, activation)
-            if k == 0:
-                x = l(i)
-            else:
-                x = l(x)
-        l = Dense(1, activation="elu")
-        o = l(x)
-        return Model(i, o)
+    def make_score_model(hidden_layers, activation):
+        layers = []
+        for h in hidden_layers:
+            layers.append(Dense(h, activation))
+        layers.append(Dense(1, activation="elu"))
+        return Sequential(layers)
