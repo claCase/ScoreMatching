@@ -32,20 +32,28 @@ class SlicedScoreMatching(Model):
             return grad, hess
         return self.f(inputs)
 
-    def sliced_score_estimator(self, data):
-        grad, hess = self(data, training=True)
+    @staticmethod
+    def sliced_score_estimator(grad, hess):
         rnd = tf.random.normal(shape=tf.shape(hess)[:2])
         sliced_hess = 0.5 * tf.einsum("bi,bio,bo->b", rnd, hess, rnd)  # eq. 8 trace estimator
         sliced_grad = 0.5 * tf.einsum("bi,bi->b", rnd, grad) ** 2  # # eq. 8 trace estimator
         return sliced_hess + sliced_grad
+    @staticmethod
+    def sliced_score_estimator_vr(grad, hess):
+        rnd = tf.random.normal(shape=tf.shape(hess)[:2])
+        sliced_hess = 0.5 * tf.einsum("bi,bio,bo->b", rnd, hess, rnd)  # eq. 8 trace estimator
+        sliced_grad = tf.linalg.norm(grad, -1)
+        return sliced_hess + sliced_grad
 
-    def loss_fn(self, data):
-        loss = self.sliced_score_estimator(data)
-        return tf.reduce_mean(loss)
+    def loss_fn(self, grad, hess, vr=False):
+        if vr:
+            return tf.reduce_mean(self.sliced_score_estimator_vr(grad, hess))
+        return tf.reduce_mean(self.sliced_score_estimator(grad, hess))
 
     def train_step(self, data):
         with tf.GradientTape() as tape:
-            loss = self.loss_fn(data)
+            grad, hess = self(data, training=True)
+            loss = self.loss_fn(grad, hess)
         grads = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
         self.loss_tracker.update_state(loss)
@@ -125,29 +133,41 @@ class EBMSlicedScoreMatching(Model):
                                        activation=activation,
                                        output_dim=output_dim)
 
-    def call(self, inputs, training=None, mask=None):
+    def call(self, inputs, training=False, mask=None):
         with tf.GradientTape() as tape:
             with tf.GradientTape() as tape1:
                 tape1.watch(inputs)
                 e = self.f(inputs)
             grad = tape1.gradient(e, inputs)
         hess = tape.batch_jacobian(grad, inputs)
-        return -e, grad, hess
+        if training:
+            return -e, grad, hess
+        else:
+            return grad
 
-    def sliced_score_estimator(self, data):
-        e, grad, hess = self(data, training=True)
+    @staticmethod
+    def sliced_score_estimator(grad, hess):
         rnd = tf.random.normal(shape=tf.shape(hess)[:2])
         sliced_hess = 0.5 * tf.einsum("bi,bio,bo->b", rnd, hess, rnd)  # eq. 8 trace estimator
         sliced_grad = 0.5 * tf.einsum("bi,bi->b", rnd, grad) ** 2  # # eq. 8 trace estimator
         return sliced_hess + sliced_grad
 
-    def loss_fn(self, data):
-        loss = self.sliced_score_estimator(data)
-        return tf.reduce_mean(loss)
+    @staticmethod
+    def sliced_score_estimator_vr(grad, hess):
+        rnd = tf.random.normal(shape=tf.shape(hess)[:2])
+        sliced_hess = 0.5 * tf.einsum("bi,bio,bo->b", rnd, hess, rnd)  # eq. 8 trace estimator
+        sliced_grad = tf.linalg.norm(grad, -1)
+        return sliced_hess + sliced_grad
+
+    def loss_fn(self, grad, hess, vr=False):
+        if vr:
+            return tf.reduce_mean(self.sliced_score_estimator_vr(grad, hess))
+        return tf.reduce_mean(self.sliced_score_estimator(grad, hess))
 
     def train_step(self, data):
         with tf.GradientTape() as tape:
-            loss = self.loss_fn(data)
+            e, grad, hess = self(data, training=True)
+            loss = self.loss_fn(grad, hess)
         grads = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
         self.loss_tracker.update_state(loss)
