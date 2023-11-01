@@ -29,5 +29,5 @@ def sliced_score_estimator_vr(grad, hess, noise_type="gaussian"):
 
 def score_loss(grad, hess, vr=False, noise_type="gaussian"):
     if vr:
-        return tf.reduce_mean(sliced_score_estimator_vr(grad, hess))
-    return tf.reduce_mean(sliced_score_estimator(grad, hess))
+        return tf.reduce_mean(sliced_score_estimator_vr(grad, hess, noise_type))
+    return tf.reduce_mean(sliced_score_estimator(grad, hess, noise_type))

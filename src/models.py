@@ -19,6 +19,7 @@ class SlicedScoreMatching(Model):
                  activation: str = "relu",
                  vr=False,
                  noise_type="gaussian",
+                 anneal_samples=0.,
                  **kwargs):
         super().__init__(**kwargs)
         self.loss_tracker = tf.keras.metrics.Mean(name="score")
@@ -27,6 +28,7 @@ class SlicedScoreMatching(Model):
         self.output_dim = output_dim
         self.vr = vr
         self.noise_type = noise_type
+        self.anneal_samples = anneal_samples
 
     def build(self, input_shape):
         super().build(input_shape)
@@ -45,6 +47,7 @@ class SlicedScoreMatching(Model):
         return self.f(inputs)
 
     def train_step(self, data):
+        data += tf.random.normal(shape=tf.shape(data)) * self.anneal_samples
         with tf.GradientTape() as tape:
             grad, hess = self(data, training=True)
             loss = score_loss(grad, hess, vr=self.vr, noise_type=self.noise_type)
@@ -120,8 +123,9 @@ class EBMSlicedScoreMatching(SlicedScoreMatching):
                  activation: str = "relu",
                  vr=False,
                  noise_type="gaussian",
+                 anneal_samples=0.,
                  **kwargs):
-        super().__init__(output_dim=1, noise_type=noise_type, vr=vr, **kwargs)
+        super().__init__(anneal_samples=anneal_samples, output_dim=1, noise_type=noise_type, vr=vr, **kwargs)
         self.f = self.make_score_model(hidden_layers=hidden_layers, activation=activation)
 
     def build(self, input_shape):
@@ -143,6 +147,7 @@ class EBMSlicedScoreMatching(SlicedScoreMatching):
             return grad
 
     def train_step(self, data):
+        data += tf.random.normal(shape=tf.shape(data)) * self.anneal_samples
         with tf.GradientTape() as tape:
             e, grad, hess = self(data, training=True)
             loss = score_loss(grad, hess, vr=self.vr, noise_type=self.noise_type)
