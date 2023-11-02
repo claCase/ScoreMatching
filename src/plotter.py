@@ -129,7 +129,33 @@ def make_training_animation(save_path, dpi=150, fps=60, max_frames=None, name="d
             energy = None
         make_grad_plot(grad=grad, e=energy, xy=inputs, ax=ax, iter=i)
 
+    fig.tight_layout()
+
     anim = animation.FuncAnimation(fig, plotter_grad, frames=len(epochs) - 1)
     anim.save(os.path.join(save_path, save_name + "_animation.gif"), fps=fps, dpi=dpi)
 
 
+def plot_trajectories(ebm=None, trajectories=None, fig=None, ax=None, x_lim=(-10, 10), save_path=None, name="default"):
+    assert ebm is not None or trajectories is not None
+    if trajectories is None:
+        trajectories = ebm.langevin_dynamics(trajectories=True, n_samples=500)
+    else:
+        assert len(trajectories.shape) == 3
+
+    if ax is None or fig is None:
+        print(f"axis is {ax} and fig is {fig}")
+        fig, ax = plt.subplots(1, figsize=(10, 10))
+
+    def plot_traj(i):
+        ax.clear()
+        _ = make_grad_plot(ebm, x_lim, x_lim, ax=ax)
+        ax.set_xlim(*x_lim)
+        ax.set_ylim(*x_lim)
+        ax.scatter(trajectories[i, :, 0], trajectories[i, :, 1], s=3, color="white")
+
+    anim = mpl.animation.FuncAnimation(fig, plot_traj, 490)
+    if save_path is None:
+        return fig, ax, anim
+    else:
+        anim.save(os.path.join(save_path, name + "_animation.gif"), fps=60, dpi=150)
+        return fig, ax, anim

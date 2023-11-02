@@ -57,59 +57,75 @@ class SlicedScoreMatching(Model):
         self.loss_tracker.update_state(loss)
         return {"Score": self.loss_tracker.result()}
 
-    def langevin_dynamics(self, initial_points=None, steps=500, n_samples=100, trajectories=False):
+    def langevin_dynamics(self,
+                          initial_points=None,
+                          steps=500,
+                          x_lim=(-6, 6),
+                          n_samples=100,
+                          trajectories=False):
         try:
-            out_dim = self.layers[-1].output_shape[-1]
+            in_dim = self.layers[0].input_shape[-1]
         except AttributeError as e:
             raise e
         except RuntimeError as e:
             raise e
-        if trajectories:
-            traj = np.empty(shape=(steps, n_samples, out_dim))
 
         def alpha(i):
             return 100 / (100 + i)
 
         if initial_points is None:
-            x = tf.random.normal(shape=(n_samples, out_dim))
+            x = tf.random.uniform(minval=x_lim[0], maxval=x_lim[1], shape=(n_samples, in_dim))
         else:
             x = initial_points
 
-        for t in range(steps):
+        if trajectories:
+            traj = np.empty(shape=(steps, n_samples, in_dim))
+            traj[0, :, :] = x
+
+        for t in range(1, steps):
             a = alpha(t)
-            x = x + 0.5 * a * self.f(x) + tf.math.sqrt(a) * tf.random.normal(shape=(1, out_dim))
+            x = x + 0.5 * a * self.f(x) + tf.math.sqrt(a) * tf.random.normal(shape=(x.shape[0], in_dim))
             if trajectories:
                 traj[t, :, :] = x.numpy()
         if trajectories:
             return traj
         return x
 
-    def annealed_langevin_dynamics(self, initial_points=None, steps=500, n_samples=100, sigma_high=2, sigma_low=0.1,
+    def annealed_langevin_dynamics(self,
+                                   initial_points=None,
+                                   steps=500,
+                                   n_samples=100,
+                                   x_lim=(-6, 6),
+                                   sigma_high=2,
+                                   sigma_low=0.1,
                                    levels=10, e=1.,
                                    trajectories=False):
         try:
-            out_dim = self.layers[-1].output_shape[-1]
+            in_dim = self.layers[0].input_shape[-1]
         except AttributeError as e:
             raise e
         except RuntimeError as e:
             raise e
 
-        if trajectories:
-            traj = np.empty(shape=(steps, n_samples, out_dim))
-
         alphas = tf.linspace(sigma_low, sigma_high, levels)[::-1]
 
         if initial_points is None:
-            x = tf.random.normal(shape=(1000, out_dim))
+            x = tf.random.uniform(minval=x_lim[0], maxval=x_lim[1], shape=(n_samples, in_dim))
         else:
+            assert initial_points.shape[-1] == in_dim
             x = initial_points
 
-        for l in range(len(alphas) - 1):
+        if trajectories:
+            traj = np.empty(shape=(steps, n_samples, in_dim))
+            traj[0, :, :] = x
+
+        for l in range(len(alphas)):
             a = e * alphas[l + 1] / alphas[l]
-            for t in range(steps):
-                x = x + 0.5 * a * self.f(x) + tf.math.sqrt(a) * tf.random.normal(shape=(1, out_dim))
+            for t in range(1, steps):
                 if trajectories:
                     traj[t, :, :] = x.numpy()
+                    print(traj[t, 0, :])
+                x = x + 0.5 * a * self.f(x) + tf.math.sqrt(a) * tf.random.normal(shape=(x.shape[0], in_dim))
         if trajectories:
             return traj
         return x

@@ -5,12 +5,12 @@ def noise(shape, type="gaussian"):
     rnd = tf.random.normal(shape=shape)
     if type == "gaussian":
         return rnd
-    elif type == "radermacher":
+    elif type == "rademacher":
         return tf.sign(rnd)
     elif type == "spherical":
         return rnd / tf.linalg.norm(rnd, axis=-1, keepdims=True) * tf.math.sqrt(tf.shape(rnd)[-1])
     else:
-        raise NotImplementedError(f"Noise type must be in 'gaussian', 'radermacher', 'spherical'")
+        raise NotImplementedError(f"Noise type must be in 'gaussian', 'rademacher', 'spherical'")
 
 
 def sliced_score_estimator(grad, hess, noise_type="gaussian"):
