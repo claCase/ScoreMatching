@@ -33,4 +33,4 @@ where $` \mathbb{P}(v) `$ can be a normal distribution $` \mathcal{N}(0,1) `$ or
 # Results 
 
 ![Gradient Estimator](https://github.com/claCase/ScoreMatching/blob/master/figures/2023-11-02T03_56_44/GradPlot.png)
-![Training Vector Filed Evolution](https://github.com/claCase/ScoreMatching/blob/master/figures/2023-11-02T03_56_44/30fps_dark_20fontsize_animation.gif)
+![Training Vector Filed Evolution](https://github.com/claCase/ScoreMatching/blob/master/figures/2023-11-02T03_56_44/30fps_dark_20fontsize_animation_compressed.gif)
