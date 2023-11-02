@@ -38,7 +38,7 @@ def make_grad_plot(model=None, x_lim=(-5, 5), y_lim=(-5, 5), num=50, reduce=5, a
         xx, yy = np.split(xy, 2, -1)
         xx, yy = np.reshape(xx, (num, num)), np.reshape(yy, (num, num))
     if e is not None:
-        title = "Estimated Vector Field of the Estimated Energy Model $ \\mathbb{\\hat{{E}}} $ : $ \\nabla_{x} \\mathbb{\\hat{{E}}}(x) $"
+        title = "Estimated Vector Field parametrized by the Energy Model $ \\hat{\\bf E}_{\\theta} $ : $ \\nabla_{x} \\hat{ \\bf E}_{\\theta}(x) $"
         ee = e.reshape(num, num)
     else:
         title = "Estimated Vector Field of the Probability Distribution $ \\mathbb{\\hat{{P}}} $ : $ \\nabla_{x} \\mathbb{\\hat{{P}}}(x) $"
@@ -49,17 +49,19 @@ def make_grad_plot(model=None, x_lim=(-5, 5), y_lim=(-5, 5), num=50, reduce=5, a
     dxx, dyy = np.split(grad, 2, -1)
     dxx, dyy = dxx.reshape(num, num), dyy.reshape(num, num)
     if ax is None:
-        fig, ax = plt.subplots(1)
+        fig, ax = plt.subplots(1, dpi=300)
     ax.set_title(title)
     if e is not None:
         ax.set_title(title)
         img = ax.contourf(xx, yy, ee, levels=100)
-        ax.contour(xx, yy, ee, levels=20, colors="black")
+        ax.contour(xx, yy, ee, levels=20, colors="black", linestyles="solid", linewidths=0.51)
         if fig is not None:
             divider = make_axes_locatable(ax)
             cax1 = divider.append_axes("right", size="5%", pad=0.05)
             fig.colorbar(img, cax=cax1, orientation="vertical")
     ax.quiver(xx[::reduce, ::reduce], yy[::reduce, ::reduce], dxx[::reduce, ::reduce], dyy[::reduce, ::reduce])
+    if fig is not None:
+        return fig, ax
     return ax
 
 
@@ -74,10 +76,10 @@ def make_distribution_grad_plot(distr, x_lim=(-5, 5), y_lim=(-5, 5), num=200, re
     dxx, dyy = tf.reshape(dxx, (num, num)).numpy(), tf.reshape(dyy, (num, num)).numpy()
     ll = ll.numpy().reshape(num, num)
     if ax is None:
-        fig, ax = plt.subplots(1)
-    ax.set_title("True Vector Field $ \\nabla_{x} \\mathbb{P}(x) $")
+        fig, ax = plt.subplots(1, dpi=300)
+    ax.set_title("True Vector Field of the probability distribution $\\mathbb{P} $: $ \\nabla_{x} \\mathbb{P}(x) $")
     img = ax.contourf(xx, yy, ll, levels=100)
-    ax.contour(xx, yy, ll, levels=20, colors="black")
+    ax.contour(xx, yy, ll, levels=20, colors="black", linestyles="solid", linewidths=0.51)
     ax.quiver(xx[::reduce, ::reduce], yy[::reduce, ::reduce], dxx[::reduce, ::reduce], dyy[::reduce, ::reduce])
     if fig is not None:
         divider = make_axes_locatable(ax)
@@ -87,7 +89,8 @@ def make_distribution_grad_plot(distr, x_lim=(-5, 5), y_lim=(-5, 5), num=200, re
     return ax
 
 
-def make_training_animation(save_path, dpi=250, fps=60):
+def make_training_animation(save_path, dpi=150, fps=60, max_frames=None, name="default", fig=None, ax=None):
+    save_name = name
     path, dirs, files = next(os.walk(save_path))
     epochs = set()
     types = set()
@@ -106,11 +109,18 @@ def make_training_animation(save_path, dpi=250, fps=60):
                 pass
     epochs = list(epochs)
     epochs.sort()
-    inputs = np.load(os.path.join(save_path, "inputs.npy"))
-    fig, ax = plt.subplots(1, figsize=(15, 15))
+    if max_frames is not None:
+        max_frames = np.minimum(max_frames, len(epochs))
+        epochs = epochs[:max_frames]
+    try:
+        inputs = np.load(os.path.join(save_path, "inputs.npy"))
+    except Exception as e:
+        raise e
+    if fig is None or ax is None:
+        fig, ax = plt.subplots(1, figsize=(15, 15), dpi=dpi)
 
     def plotter_grad(i):
-        print(i)
+        print(f"Processing frame {i}")
         ax.clear()
         grad = np.load(os.path.join(save_path, str(epochs[i]) + "_" + name + "_grad.npy"))
         if "energy" in types:
@@ -120,4 +130,6 @@ def make_training_animation(save_path, dpi=250, fps=60):
         make_grad_plot(grad=grad, e=energy, xy=inputs, ax=ax, iter=i)
 
     anim = animation.FuncAnimation(fig, plotter_grad, frames=len(epochs) - 1)
-    anim.save(os.path.join(save_path, "animation.gif"), fps=fps, dpi=dpi)
+    anim.save(os.path.join(save_path, save_name + "_animation.gif"), fps=fps, dpi=dpi)
+
+

@@ -50,7 +50,7 @@ def make_cross_shaped_distribution(n_samples):
     return mix.sample(n_samples).numpy()
 
 
-def save_output(model, inputs, save_path, name="default", every=5):
+def save_output_callback(model, inputs, save_path, name="default", every=5, stop=300):
     now = datetime.now().isoformat()[:-7].replace(":", "_")
     save_path = os.path.join(save_path, now)
     os.makedirs(save_path)
@@ -59,8 +59,8 @@ def save_output(model, inputs, save_path, name="default", every=5):
     np.save(os.path.join(save_path, "inputs.npy"), inputs)
 
     def on_epoch_end(epoch, logs):
-        if not epoch % every:
-            o = model(inputs)
+        if not epoch % every and epoch <= stop:
+            o = model(inputs, training=True)
             if len(o) == 1:
                 e, grad, hess = None, o, None
             elif len(o) == 3:
@@ -76,12 +76,7 @@ def save_output(model, inputs, save_path, name="default", every=5):
                 np.save(os.path.join(save_path, str(epoch) + "_" + name + "_hessian.npy"), hess)
             np.save(os.path.join(save_path, str(epoch) + "_" + name + "_grad.npy"), grad)
 
-    return on_epoch_end, save_path
-
-
-def make_save_callback(model, inputs, save_path, name="default"):
-    callback, save_path = save_output(model, inputs, save_path, name)
-    return tf.keras.callbacks.LambdaCallback(on_epoch_end=callback), save_path
+    return tf.keras.callbacks.LambdaCallback(on_epoch_end=on_epoch_end), save_path
 
 
 class AnnealNoiseSamples(tf.keras.callbacks.Callback):

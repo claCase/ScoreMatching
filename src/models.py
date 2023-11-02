@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 from typing import List, Tuple
 from src.losses import score_loss
@@ -56,34 +57,45 @@ class SlicedScoreMatching(Model):
         self.loss_tracker.update_state(loss)
         return {"Score": self.loss_tracker.result()}
 
-    def langevin_dynamics(self, initial_points=None, steps=500):
+    def langevin_dynamics(self, initial_points=None, steps=500, n_samples=100, trajectories=False):
         try:
             out_dim = self.layers[-1].output_shape[-1]
         except AttributeError as e:
             raise e
         except RuntimeError as e:
             raise e
+        if trajectories:
+            traj = np.empty(shape=(steps, n_samples, out_dim))
 
         def alpha(i):
             return 100 / (100 + i)
 
         if initial_points is None:
-            x = tf.random.normal(shape=(1000, out_dim))
+            x = tf.random.normal(shape=(n_samples, out_dim))
         else:
             x = initial_points
 
         for t in range(steps):
             a = alpha(t)
             x = x + 0.5 * a * self.f(x) + tf.math.sqrt(a) * tf.random.normal(shape=(1, out_dim))
+            if trajectories:
+                traj[t, :, :] = x.numpy()
+        if trajectories:
+            return traj
         return x
 
-    def annealed_langevin_dynamics(self, initial_points=None, steps=500, sigma_high=2, sigma_low=0.1, levels=10, e=1.):
+    def annealed_langevin_dynamics(self, initial_points=None, steps=500, n_samples=100, sigma_high=2, sigma_low=0.1,
+                                   levels=10, e=1.,
+                                   trajectories=False):
         try:
             out_dim = self.layers[-1].output_shape[-1]
         except AttributeError as e:
             raise e
         except RuntimeError as e:
             raise e
+
+        if trajectories:
+            traj = np.empty(shape=(steps, n_samples, out_dim))
 
         alphas = tf.linspace(sigma_low, sigma_high, levels)[::-1]
 
@@ -96,6 +108,10 @@ class SlicedScoreMatching(Model):
             a = e * alphas[l + 1] / alphas[l]
             for t in range(steps):
                 x = x + 0.5 * a * self.f(x) + tf.math.sqrt(a) * tf.random.normal(shape=(1, out_dim))
+                if trajectories:
+                    traj[t, :, :] = x.numpy()
+        if trajectories:
+            return traj
         return x
 
     @staticmethod
@@ -142,7 +158,7 @@ class EBMSlicedScoreMatching(SlicedScoreMatching):
             grad = tape1.gradient(e, inputs)
         hess = tape.batch_jacobian(grad, inputs)
         if training:
-            return -e, grad, hess
+            return e, grad, hess
         else:
             return grad
 
