@@ -9,10 +9,10 @@ The loss function takes the following form:
 \mathcal{L}(\theta) = \mathbb{E}_{\mathbb{P}(x)} [ Tr(\nabla_{x}\bf{s}_{\theta}(x)) + \frac{1}{2} \| \bf{s}_{\theta}(x) \|^{2}_{2} ]
 ```
 
-Where Tr is the trace operator and $` \bf{s}_{\theta}(x) `$ is the score (gradient) estimator of the energy function $` \bf E_{\theta}: \mathbb{R}^{d} \rightarrow \mathbb{R} `$ :
+Where Tr is the trace operator and $` \bf{s}_{\theta}(x) `$ is the score (gradient) estimator of the energy function $` \bf E_{\theta}: \mathbb{R}^{d} \rightarrow \mathbb{R} `$  with parameters $` \theta `$ :
 
 ```math
-\bf{s}_{\theta}(x) = \nabla_{x} \bf E(x)
+\bf{s}_{\theta}(x) = \nabla_{x} \bf E_{\theta}(x)
 ```
 
 The energy $` \bf E_{\theta} `$ is estimates the un-normalized log-density function:
