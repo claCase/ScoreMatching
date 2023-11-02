@@ -1,6 +1,6 @@
 # Scliced Score Matching
 
-Non Ufficial implementation of sliced score matching in TensorFlow v2. The basic idea is to estimate the gradient field
+Non official implementation of sliced score matching in TensorFlow v2. The basic idea is to estimate the gradient field
 of an un-normalized energy function to match the true gradient field of the normalized data generating density function.
 The gradient where the sampled points lie should be close to zero to indicate high probability of sampling.
 The loss function takes the following form:
@@ -15,7 +15,7 @@ Where Tr is the trace operator and $` \bf{s}_{\theta}(x) `$ is the score (gradie
 \bf{s}_{\theta}(x) = \nabla_{x} \bf E_{\theta}(x)
 ```
 
-The energy $` \bf E_{\theta} `$ is estimates the un-normalized log-density function:
+The energy $` \bf E_{\theta} `$ estimates the un-normalized log-density function:
 
 ```math
 log(\mathbb{P}_{\theta}(x)) = log(\frac{\bf e^{E_{\theta}(x)}}{\bf Z})
