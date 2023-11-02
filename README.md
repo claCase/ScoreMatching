@@ -18,10 +18,16 @@ Where Tr is the trace operator and $` \bf{s}_{\theta}(x) `$ is the score (gradie
 The energy $` \bf E_{\theta} `$ is estimates the un-normalized log-density function:
 
 ```math
-log(\mathbb{P}_{\theta}(x)) =log(\frac{\bf E_{\theta}(x)}{\bf Z})
+log(\mathbb{P}_{\theta}(x)) = log(\frac{\bf e^{E_{\theta}(x)}}{\bf Z})
 ```
 
-where $` \bf `$ is the partition function (or normalizing constant). \
+```math
+\Rightarrow \bf E_{\theta}(x) \propto log(\mathbb{P}_{\theta}(x))  
+```
+
+where $` \bf Z `$ is the partition function (normalizing constant), which does not depend on parameters.
+\
+\
 The trace of the hessian matrix $` Tr(\nabla_{x}\bf{s}_{\theta}(x)) `$ can be estimated by the Hutchinson trace estimator:
 
 ```math
