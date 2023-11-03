@@ -1,3 +1,4 @@
+from typing import List, Tuple, Union
 from math import pi
 import os
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -50,7 +51,7 @@ def make_cross_shaped_distribution(n_samples):
     return mix.sample(n_samples).numpy()
 
 
-def save_output_callback(model, inputs, save_path, name="default", every=5, stop=300):
+def save_output_callback(model, inputs, save_path: os.path, every: int = 5, stop: int = 300, name: str = "default"):
     now = datetime.now().isoformat()[:-7].replace(":", "_")
     save_path = os.path.join(save_path, now)
     os.makedirs(save_path)
@@ -65,9 +66,16 @@ def save_output_callback(model, inputs, save_path, name="default", every=5, stop
                 e, grad, hess = None, o, None
             elif len(o) == 3:
                 e, grad, hess = o
+            elif len(o) == 2:
+                grad, z = o
+                if z.shape[-1] == 1:
+                    e = z
+                    hess = None
+                else:
+                    hess = z
+                    e = None
             else:
                 raise NotImplementedError
-
             if e is not None:
                 e = e.numpy()
                 np.save(os.path.join(save_path, str(epoch) + "_" + name + "_energy.npy"), e)
@@ -119,3 +127,32 @@ class AnnealNoiseSamples(tf.keras.callbacks.Callback):
     def on_train_end(self, logs=None):
         self.lr = self.start
         self.model.anneal_samples = 1.
+
+
+def noise(shape, type="gaussian"):
+    rnd = tf.random.normal(shape=shape)
+    if type == "gaussian":
+        return rnd
+    elif type == "rademacher":
+        return tf.sign(rnd)
+    elif type == "spherical":
+        return rnd / tf.linalg.norm(rnd, axis=-1, keepdims=True) * tf.math.sqrt(tf.shape(rnd)[-1])
+    else:
+        raise NotImplementedError(f"Noise type must be in 'gaussian', 'rademacher', 'spherical'")
+
+
+def corrupt_samples(samples: tf.Tensor, sigmas: Union[Tuple, tf.Tensor]):
+    """
+    Corrupts samples based on σ parameter
+    :param samples: samples to corrupt of shape B x d
+    :param sigmas: standard deviation of normal distribution
+    :return: corrupted samples of shape B*|σ| x d
+    """
+    ss = tf.shape(samples)
+    B, d = ss[0], ss[1]
+    sigmas = tf.convert_to_tensor(sigmas, samples.dtype)
+    corruption = noise(shape=(B, tf.shape(sigmas)[0], d))
+    corruption = corruption * sigmas[None, :, None]  # scale noise by sigmas: B x |σ| x d
+    corrupted_samples = samples[:, None, :] + corruption
+    corrupted_samples = tf.reshape(corrupted_samples, (-1, d))  # B*|σ| x d
+    return corrupted_samples

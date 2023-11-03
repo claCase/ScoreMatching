@@ -22,11 +22,15 @@ def make_grad_plot(model=None, x_lim=(-5, 5), y_lim=(-5, 5), num=50, reduce=5, a
         xx, yy, xy = make_base_points(x_lim, y_lim, num)
         o = model(xy, training=True)
         if len(o) == 3:
-            e, grad, _ = o
+            grad, _, e = o
             e, grad = e.numpy(), grad.numpy()
         elif len(o) == 2:
-            grad, _ = o.numpy()
-            e = None
+            grad, z = o
+            z = z.numpy()
+            if z.shape[-1] == 1:
+                e = z
+            else:
+                e = None
         else:
             raise ValueError(
                 f"The model in training mode must return either (energy, grad, hessian) or (grad, hessian)")
@@ -89,7 +93,8 @@ def make_distribution_grad_plot(distr, x_lim=(-5, 5), y_lim=(-5, 5), num=200, re
     return ax
 
 
-def make_training_animation(save_path, dpi=150, fps=60, max_frames=None, name="default", fig=None, ax=None):
+def make_training_animation(save_path, dpi=150, fps=60, max_frames=None, fig=None, ax=None, name="default",
+                            **kwargs_grad_plot):
     save_name = name
     path, dirs, files = next(os.walk(save_path))
     epochs = set()
@@ -127,7 +132,7 @@ def make_training_animation(save_path, dpi=150, fps=60, max_frames=None, name="d
             energy = np.load(os.path.join(save_path, str(epochs[i]) + "_" + name + "_energy.npy"))
         else:
             energy = None
-        make_grad_plot(grad=grad, e=energy, xy=inputs, ax=ax, iter=i)
+        make_grad_plot(grad=grad, e=energy, xy=inputs, ax=ax, iter=i, **kwargs_grad_plot)
 
     fig.tight_layout()
 
