@@ -6,7 +6,7 @@ The loss function takes the following form:
 \mathcal{L}(\theta) = \mathbb{E}_{\mathbb{P}(x)} [ Tr(\nabla_{x}\bf{s}_{\theta}(x)) + \frac{1}{2} \| \bf{s}_{\theta}(x) \|^{2}_{2} ]
 ```
 
-Where Tr is the trace operator and $` \bf{s}_{\theta}(x) `$ is the score (gradient) estimator of the energy function $` \bf E_{\theta}: \mathbb{R}^{d} \rightarrow \mathbb{R} `$  with parameters $` \theta `$ :
+Where $` Tr `$ is the trace operator and $` \bf{s}_{\theta}(x) `$ is the score (gradient) estimator of the energy function $` \bf E_{\theta}: \mathbb{R}^{d} \rightarrow \mathbb{R} `$  with parameters $` \theta `$ :
 
 ```math
 \bf{s}_{\theta}(x) = \nabla_{x} \bf E_{\theta}(x)
@@ -58,8 +58,24 @@ To increase the accuracy of the model the final loss function is weighted in pro
 ```math
 \mathcal L(\theta, \{ \sigma_{i} \}_{i=1}^L) = \frac{1}{L} \sum_{i}^{L} \sigma^2_{i} \mathcal L(\theta, \sigma_{i})
 ```
+
+# Sampling by Langevin Dynamics
+
+To generate samples from the one can uniformly sample some points in the region of the data manifold, and then update the sampled points in the direction of the gradient predicted by the score model and adding some small noise perturbation: 
+
+```math
+x_{t+1} = x_{t} + \frac{1}{2} \alpha_{t} *  s_{\theta}  (x) + \sqrt{\alpha} \, n
+```
+where $` n \sim \mathcal N(0, 1) `$ and  $` \alpha `$ is a step size hyperparameter. 
+
+
 ### Energy Based De-noising Score Matching
+Evolution of the estimated vector field of the density score
 ![Training Vector Filed Evolution](https://github.com/claCase/ScoreMatching/blob/master/figures/Denoising%20Score%20Matching/Gaussian%20Mixture/2023-11-04T03_59_29/ebm_de-noising_animation_animation.gif)
+
+Evolution of samples points via annealed Langevin Dynamics 
+![Langevin Sampling](https://github.com/claCase/ScoreMatching/blob/master/figures/Denoising%20Score%20Matching/Gaussian%20Mixture/2023-11-04T03_59_29/default_trajectory_animation.gif)
+
 
 # Results 
 ### Energy Based Sliced Score Matching 
