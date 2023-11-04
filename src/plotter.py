@@ -21,18 +21,23 @@ def make_base_points(x_lim=(-5, 5), y_lim=(-5, 5), num=200):
 
 
 def make_grad_plot(
-    model=None,
-    x_lim=(-5, 5),
-    y_lim=(-5, 5),
-    num=50,
-    reduce=5,
-    ax=None,
-    fig=None,
-    iter=None,
-    grad=None,
-    e=None,
-    xy=None,
-    fontsize=20,
+        model=None,
+        x_lim=(-5, 5),
+        y_lim=(-5, 5),
+        num=50,
+        reduce=5,
+        ax=None,
+        fig=None,
+        iter=None,
+        grad=None,
+        e=None,
+        xy=None,
+        fontsize=20,
+        quiver=True,
+        contour=True,
+        title=True,
+        alpha=1,
+        cmap="viridis"
 ):
     assert model is not None or (grad is not None and xy is not None)
     if model is not None:
@@ -56,14 +61,14 @@ def make_grad_plot(
         if isinstance(grad, tf.Tensor):
             grad = grad.numpy()
         num = int(np.sqrt(xy.shape[0]))
-        assert num**2 == xy.shape[0]
+        assert num ** 2 == xy.shape[0]
         xx, yy = np.split(xy, 2, -1)
         xx, yy = np.reshape(xx, (num, num)), np.reshape(yy, (num, num))
     if e is not None:
-        title = "Estimated Vector Field parametrized by the Energy Model $ \\hat{\\bf E}_{\\theta} $ : $ \\nabla_{x} \\hat{ \\bf E}_{\\theta}(x) $"
+        title_ = "Estimated Vector Field parametrized by the Energy Model $ \\hat{\\bf E}_{\\theta} $ : $ \\nabla_{x} \\hat{ \\bf E}_{\\theta}(x) $"
         ee = e.reshape(num, num)
     else:
-        title = "Estimated Vector Field of the Probability Distribution $ \\mathbb{\\hat{{P}}} $ : $ \\nabla_{x} \\mathbb{\\hat{{P}}}(x) $"
+        title_ = "Estimated Vector Field of the Probability Distribution $ \\mathbb{\\hat{{P}}} $ : $ \\nabla_{x} \\mathbb{\\hat{{P}}}(x) $"
 
     if iter is not None:
         xlim = ax.get_xlim()
@@ -82,10 +87,12 @@ def make_grad_plot(
     dxx, dyy = dxx.reshape(num, num), dyy.reshape(num, num)
     if ax is None:
         fig, ax = plt.subplots(1, dpi=300)
-    ax.set_title(title)
-    if e is not None:
-        ax.set_title(title, fontsize=fontsize)
-        img = ax.contourf(xx, yy, ee, levels=100)
+    if title:
+        ax.set_title(title_)
+    if e is not None and contour:
+        if title:
+            ax.set_title(title_, fontsize=fontsize)
+        img = ax.contourf(xx, yy, ee, levels=100, cmap=cmap)
         ax.contour(
             xx, yy, ee, levels=20, colors="black", linestyles="solid", linewidths=0.51
         )
@@ -93,26 +100,28 @@ def make_grad_plot(
             divider = make_axes_locatable(ax)
             cax1 = divider.append_axes("right", size="5%", pad=0.05)
             fig.colorbar(img, cax=cax1, orientation="vertical")
-    ax.quiver(
-        xx[::reduce, ::reduce],
-        yy[::reduce, ::reduce],
-        dxx[::reduce, ::reduce],
-        dyy[::reduce, ::reduce],
-    )
+    if quiver:
+        ax.quiver(
+            xx[::reduce, ::reduce],
+            yy[::reduce, ::reduce],
+            dxx[::reduce, ::reduce],
+            dyy[::reduce, ::reduce],
+            alpha=alpha
+        )
     if fig is not None:
         return fig, ax
     return ax
 
 
 def make_distribution_grad_plot(
-    distr,
-    x_lim=(-5, 5),
-    y_lim=(-5, 5),
-    num=200,
-    reduce=10,
-    ax=None,
-    fig=None,
-    fontsize=20,
+        distr,
+        x_lim=(-5, 5),
+        y_lim=(-5, 5),
+        num=200,
+        reduce=10,
+        ax=None,
+        fig=None,
+        fontsize=20,
 ):
     assert issubclass(type(distr), Distribution)
     xx, yy, xy = make_base_points(x_lim, y_lim, num)
@@ -149,14 +158,14 @@ def make_distribution_grad_plot(
 
 
 def make_training_animation(
-    save_path,
-    dpi=150,
-    fps=60,
-    max_frames=None,
-    fig=None,
-    ax=None,
-    name="default",
-    **kwargs_grad_plot,
+        save_path,
+        dpi=150,
+        fps=60,
+        max_frames=None,
+        fig=None,
+        ax=None,
+        name="default",
+        **kwargs_grad_plot,
 ):
     save_name = name
     path, dirs, files = next(os.walk(save_path))
@@ -219,14 +228,18 @@ def make_training_animation(
 
 
 def plot_trajectories(
-    ebm=None,
-    trajectories=None,
-    fig=None,
-    ax=None,
-    x_lim=(-10, 10),
-    save_path=None,
-    name="default",
-    **kwargs_grad_plot,
+        ebm=None,
+        trajectories=None,
+        fig=None,
+        ax=None,
+        marg_x=None,
+        marg_y=None,
+        x_lim=(-10, 10),
+        save_path=None,
+        name="default_trajectory",
+        dpi=90,
+        distr=None,
+        **kwargs_grad_plot,
 ):
     assert ebm is not None or trajectories is not None
     if trajectories is None:
@@ -236,16 +249,58 @@ def plot_trajectories(
 
     if ax is None or fig is None:
         print(f"axis is {ax} and fig is {fig}")
-        fig, ax = plt.subplots(1, figsize=(10, 10))
+        fig = plt.figure(figsize=(10, 10))
+        fig.suptitle("Langevin Dynamics Trajectory Sampling", fontsize=30)
+        gs = fig.add_gridspec(2, 2, width_ratios=(4, 1), height_ratios=(1, 4),
+                              left=0.1, right=0.9, bottom=0.1, top=0.9,
+                              wspace=0.05, hspace=0.05)
+        ax = fig.add_subplot(gs[1, 0])
+        marg_x = fig.add_subplot(gs[0, 0], sharex=ax)
+        marg_y = fig.add_subplot(gs[1, 1], sharey=ax)
+
+    if marg_y is not None or marg_x is not None:
+        title = False
+        if distr is not None:
+            assert issubclass(type(distr), Distribution)
+            xx, yy, xy = make_base_points(x_lim, x_lim, 200)
+            dp = distr.prob(xy).numpy()
+            dp = dp.reshape(200, 200)
+            px, py = dp.sum(0), dp.sum(1)
+            px, py = px / px.sum(), py / py.sum()
+            max_y_lim = np.maximum(np.max(px), np.max(py)) + 0.01
+    else:
+        title = True
+    kwargs_grad_plot.update({"title": title})
 
     def plot_traj(i):
+        print(f"Processing frame {i}")
         ax.clear()
         ax.set_xlim(*x_lim)
         ax.set_ylim(*x_lim)
         _ = make_grad_plot(ebm, x_lim, x_lim, ax=ax, iter=i, **kwargs_grad_plot)
         ax.scatter(trajectories[i, :, 0], trajectories[i, :, 1], s=5, color="black")
+        if marg_y is not None:
+            marg_y.clear()
+            marg_y.set_xlim(0, max_y_lim)
+            # max_ = np.minimum(trajectories.shape[1], 500)
+            # marg_y.hist(trajectories[i, :max_, 0], bins=60, orientation='horizontal', density=True)
+            h, b = np.histogram(trajectories[i, :, 1], bins=200, range=x_lim)
+            h = h / h.sum()
+            marg_y.stairs(h, b, fill=True, color="purple", orientation='horizontal')
+            if distr is not None:
+                marg_y.plot(py, xx[0], color="red")
+        if marg_x is not None:
+            marg_x.clear()
+            marg_x.set_ylim(0, max_y_lim)
+            # max_ = np.minimum(trajectories.shape[1], 500)
+            h, b = np.histogram(trajectories[i, :, 0], bins=200, range=x_lim)
+            h = h / h.sum()
+            marg_x.stairs(h, b, fill=True, color="purple")
+            # marg_x.hist(trajectories[i, :max_, 0], bins=60, density=True)
+            if distr is not None:
+                marg_x.plot(xx[0], px, color="red")
 
     anim = mpl.animation.FuncAnimation(fig, plot_traj, trajectories.shape[0])
     if save_path is not None:
-        anim.save(os.path.join(save_path, name + "_animation.gif"), fps=60, dpi=150)
+        anim.save(os.path.join(save_path, name + "_animation.gif"), fps=60, dpi=dpi)
     return fig, ax, anim

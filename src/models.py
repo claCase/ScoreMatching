@@ -79,7 +79,7 @@ class SlicedScoreMatching(Model):
             raise e
 
         def alpha(i):
-            return 100 / (100 + i)
+            return 1 / (200 + i)
 
         if initial_points is None:
             x = tf.random.uniform(
@@ -92,15 +92,17 @@ class SlicedScoreMatching(Model):
             traj = np.empty(shape=(steps, n_samples, in_dim))
             traj[0, :, :] = x
 
+        prog = tf.keras.utils.Progbar(steps - 1)
         for t in range(1, steps):
             a = alpha(t)
             x = (
                     x
-                    + 0.5 * a * self.f(x)
+                    + 0.5 * a * self(x)
                     + tf.math.sqrt(a) * tf.random.normal(shape=(x.shape[0], in_dim))
             )
             if trajectories:
                 traj[t, :, :] = x.numpy()
+            prog.update(t)
         if trajectories:
             return traj
         return x
@@ -111,7 +113,7 @@ class SlicedScoreMatching(Model):
             steps=500,
             n_samples=100,
             x_lim=(-6, 6),
-            sigma_high=1,
+            sigma_high=1.,
             sigma_low=0.01,
             levels=10,
             e=0.0001,
@@ -124,7 +126,9 @@ class SlicedScoreMatching(Model):
         except RuntimeError as re:
             raise re
 
-        alphas = tf.linspace(sigma_low, sigma_high, levels)[::-1]
+        alphas = tf.exp(
+            tf.linspace(tf.math.log(sigma_low), tf.math.log(sigma_high), levels)
+        )[::-1]
 
         if initial_points is None:
             x = tf.random.uniform(
@@ -137,8 +141,9 @@ class SlicedScoreMatching(Model):
         if trajectories:
             traj = np.empty(shape=(steps * levels + 1, n_samples, in_dim))
             traj[0, :, :] = x
-
-        for l in range(len(alphas)):
+        cntr = 1
+        prog = tf.keras.utils.Progbar(levels * steps)
+        for l in range(levels):
             a = e * alphas[l] / alphas[-1]
             for t in range(0, steps):
                 x = (
@@ -147,7 +152,9 @@ class SlicedScoreMatching(Model):
                         + tf.math.sqrt(a) * tf.random.normal(shape=(x.shape[0], in_dim))
                 )
                 if trajectories:
-                    traj[1 + t * l, :, :] = x.numpy()
+                    traj[cntr, :, :] = x.numpy()
+                prog.update(cntr)
+                cntr += 1
         if trajectories:
             return traj
         return x
@@ -318,6 +325,7 @@ class NoiseConditionalScoreModel(Model):
             traj = np.empty(shape=(steps, n_samples, in_dim))
             traj[0, :, :] = x
 
+        prog = tf.keras.utils.Progbar(steps - 1)
         for t in range(1, steps):
             a = alpha(t)
             x = (
@@ -327,6 +335,7 @@ class NoiseConditionalScoreModel(Model):
             )
             if trajectories:
                 traj[t, :, :] = x.numpy()
+            prog.update(t)
         if trajectories:
             return traj
         return x
@@ -337,7 +346,7 @@ class NoiseConditionalScoreModel(Model):
             steps=500,
             n_samples=100,
             x_lim=(-6, 6),
-            sigma_high=1,
+            sigma_high=1.,
             sigma_low=0.01,
             levels=10,
             e=0.0001,
@@ -365,8 +374,9 @@ class NoiseConditionalScoreModel(Model):
         if trajectories:
             traj = np.empty(shape=(steps * levels + 1, n_samples, in_dim))
             traj[0, :, :] = x
-
-        for l in range(len(alphas)):
+        cntr = 1
+        prog = tf.keras.utils.Progbar(levels * steps)
+        for l in range(levels):
             a = e * alphas[l] / alphas[-1]
             for t in range(0, steps):
                 x = (
@@ -375,7 +385,9 @@ class NoiseConditionalScoreModel(Model):
                         + tf.math.sqrt(a) * tf.random.normal(shape=(x.shape[0], in_dim))
                 )
                 if trajectories:
-                    traj[1 + t * l, :, :] = x.numpy()
+                    traj[cntr, :, :] = x.numpy()
+                prog.update(cntr)
+                cntr += 1
         if trajectories:
             return traj
         return x
