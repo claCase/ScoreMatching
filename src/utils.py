@@ -1,10 +1,6 @@
 from typing import List, Tuple, Union
 from math import pi
 import os
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-from matplotlib import animation
 import tensorflow as tf
 import numpy as np
 from numpy.random import choice
@@ -17,9 +13,6 @@ from tensorflow_probability.python.distributions import (MultivariateNormalTriL,
                                                          MultivariateNormalDiag)
 
 from datetime import datetime
-
-plt.rc('text', usetex=True)
-plt.rc('text.latex', preamble=r'\usepackage{amsmath} \usepackage{amssymb}')
 
 
 def make_spiral_galaxy(n_spirals=5, length=1, angle=np.pi / 2, n_samples=100, noise=0, shuffle=True):
@@ -40,15 +33,40 @@ def make_spiral_galaxy(n_spirals=5, length=1, angle=np.pi / 2, n_samples=100, no
     return xy, y
 
 
+def make_circle_gaussian(n_gaussians=5, sigma=1, radius=2, n_samples=100, shuffle=True):
+    thetas = np.linspace(0, np.pi * 2, n_gaussians + 1)
+    thetas = thetas[:-1]
+    x0 = np.cos(thetas) * radius
+    x1 = np.sin(thetas) * radius
+    x0 = x0.T.reshape(-1, 1)
+    x1 = x1.T.reshape(-1, 1)
+    xy = np.concatenate([x0, x1], -1).astype(np.float32)
+    components = [MultivariateNormalDiag(mu, [sigma, sigma]) for mu in xy]
+    probs = tf.ones(n_gaussians) / n_gaussians
+    cat = Categorical(probs=probs)
+    mix = Mixture(cat=cat, components=components)
+    samples = np.random.normal(size=(n_gaussians, n_samples, 2)) * sigma + xy[:, None, :]
+    samples = samples.reshape(-1, 2)
+    y = np.repeat(np.arange(n_gaussians), n_samples)
+    if shuffle:
+        xy, y = skshuffle(samples, y)
+    return xy, y, mix
+
+
 def make_cross_shaped_distribution(n_samples):
+    components = [
+        MultivariateNormalTriL(loc=[0, 2], scale_tril=tf.linalg.cholesky([[.15 ** 2, 0], [0, 1]])),
+        MultivariateNormalTriL(loc=[-2, 0], scale_tril=tf.linalg.cholesky([[1, 0], [0, .15 ** 2]])),
+        MultivariateNormalTriL(loc=[2, 0], scale_tril=tf.linalg.cholesky([[1, 0], [0, .15 ** 2]])),
+        MultivariateNormalTriL(loc=[0, -2], scale_tril=tf.linalg.cholesky([[.15 ** 2, 0], [0, 1]]))
+    ]
+    x = np.empty((n_samples * 4, 2))
+    for i, c in enumerate(components):
+        x[n_samples * i: n_samples * (i + 1), :] = c.sample(n_samples).numpy()
+    y = np.repeat(np.arange(4), n_samples)
     mix = Mixture(cat=Categorical(probs=[1 / 4, 1 / 4, 1 / 4, 1 / 4]),
-                  components=[
-                      MultivariateNormalTriL(loc=[0, 2], scale_tril=tf.linalg.cholesky([[.15 ** 2, 0], [0, 1]])),
-                      MultivariateNormalTriL(loc=[-2, 0], scale_tril=tf.linalg.cholesky([[1, 0], [0, .15 ** 2]])),
-                      MultivariateNormalTriL(loc=[2, 0], scale_tril=tf.linalg.cholesky([[1, 0], [0, .15 ** 2]])),
-                      MultivariateNormalTriL(loc=[0, -2], scale_tril=tf.linalg.cholesky([[.15 ** 2, 0], [0, 1]]))
-                  ])
-    return mix.sample(n_samples).numpy()
+                  components=components)
+    return x, y, mix
 
 
 def save_output_callback(model, inputs, save_path: os.path, every: int = 5, stop: int = 300, name: str = "default"):
