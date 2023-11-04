@@ -7,9 +7,9 @@ from matplotlib import animation
 import tensorflow as tf
 import numpy as np
 
-plt.rc('text', usetex=True)
-plt.rc('text.latex', preamble=r'\usepackage{amsmath} \usepackage{amssymb}')
-plt.style.use('dark_background')
+plt.rc("text", usetex=True)
+plt.rc("text.latex", preamble=r"\usepackage{amsmath} \usepackage{amssymb}")
+plt.style.use("dark_background")
 
 
 def make_base_points(x_lim=(-5, 5), y_lim=(-5, 5), num=200):
@@ -20,8 +20,20 @@ def make_base_points(x_lim=(-5, 5), y_lim=(-5, 5), num=200):
     return xx, yy, xy
 
 
-def make_grad_plot(model=None, x_lim=(-5, 5), y_lim=(-5, 5), num=50, reduce=5, ax=None, fig=None, iter=None,
-                   grad=None, e=None, xy=None, fontsize=20):
+def make_grad_plot(
+    model=None,
+    x_lim=(-5, 5),
+    y_lim=(-5, 5),
+    num=50,
+    reduce=5,
+    ax=None,
+    fig=None,
+    iter=None,
+    grad=None,
+    e=None,
+    xy=None,
+    fontsize=20,
+):
     assert model is not None or (grad is not None and xy is not None)
     if model is not None:
         xx, yy, xy = make_base_points(x_lim, y_lim, num)
@@ -38,12 +50,13 @@ def make_grad_plot(model=None, x_lim=(-5, 5), y_lim=(-5, 5), num=50, reduce=5, a
                 e = None
         else:
             raise ValueError(
-                f"The model in training mode must return either (energy, grad, hessian) or (grad, hessian)")
+                f"The model in training mode must return either (energy, grad, hessian) or (grad, hessian)"
+            )
     else:
         if isinstance(grad, tf.Tensor):
             grad = grad.numpy()
         num = int(np.sqrt(xy.shape[0]))
-        assert num ** 2 == xy.shape[0]
+        assert num**2 == xy.shape[0]
         xx, yy = np.split(xy, 2, -1)
         xx, yy = np.reshape(xx, (num, num)), np.reshape(yy, (num, num))
     if e is not None:
@@ -55,9 +68,14 @@ def make_grad_plot(model=None, x_lim=(-5, 5), y_lim=(-5, 5), num=50, reduce=5, a
     if iter is not None:
         xlim = ax.get_xlim()
         ylim = ax.get_ylim()
-        text = ax.text(xlim[0] - 0.05 * xlim[0], ylim[1] - 0.12 * ylim[1], f'Iteration {iter}',
-                       fontsize=15, color='white',
-                       bbox={'facecolor': 'black', 'edgecolor': 'black', 'pad': 10})
+        text = ax.text(
+            xlim[0] - 0.05 * xlim[0],
+            ylim[1] - 0.12 * ylim[1],
+            f"Iteration {iter}",
+            fontsize=15,
+            color="white",
+            bbox={"facecolor": "black", "edgecolor": "black", "pad": 10},
+        )
 
     assert grad.shape[-1] == 2
     dxx, dyy = np.split(grad, 2, -1)
@@ -68,19 +86,34 @@ def make_grad_plot(model=None, x_lim=(-5, 5), y_lim=(-5, 5), num=50, reduce=5, a
     if e is not None:
         ax.set_title(title, fontsize=fontsize)
         img = ax.contourf(xx, yy, ee, levels=100)
-        ax.contour(xx, yy, ee, levels=20, colors="black", linestyles="solid", linewidths=0.51)
+        ax.contour(
+            xx, yy, ee, levels=20, colors="black", linestyles="solid", linewidths=0.51
+        )
         if fig is not None:
             divider = make_axes_locatable(ax)
             cax1 = divider.append_axes("right", size="5%", pad=0.05)
             fig.colorbar(img, cax=cax1, orientation="vertical")
-    ax.quiver(xx[::reduce, ::reduce], yy[::reduce, ::reduce], dxx[::reduce, ::reduce], dyy[::reduce, ::reduce])
+    ax.quiver(
+        xx[::reduce, ::reduce],
+        yy[::reduce, ::reduce],
+        dxx[::reduce, ::reduce],
+        dyy[::reduce, ::reduce],
+    )
     if fig is not None:
         return fig, ax
     return ax
 
 
-def make_distribution_grad_plot(distr, x_lim=(-5, 5), y_lim=(-5, 5), num=200, reduce=10, ax=None, fig=None,
-                                fontsize=20):
+def make_distribution_grad_plot(
+    distr,
+    x_lim=(-5, 5),
+    y_lim=(-5, 5),
+    num=200,
+    reduce=10,
+    ax=None,
+    fig=None,
+    fontsize=20,
+):
     assert issubclass(type(distr), Distribution)
     xx, yy, xy = make_base_points(x_lim, y_lim, num)
     with tf.GradientTape() as tape:
@@ -93,11 +126,20 @@ def make_distribution_grad_plot(distr, x_lim=(-5, 5), y_lim=(-5, 5), num=200, re
     ll = ll.numpy().reshape(num, num)
     if ax is None:
         fig, ax = plt.subplots(1, dpi=300)
-    ax.set_title("True Vector Field of the probability distribution $\\mathbb{P} $: $ \\nabla_{x} \\mathbb{P}(x) $",
-                 fontsize=fontsize)
+    ax.set_title(
+        "True Vector Field of the probability distribution $\\mathbb{P} $: $ \\nabla_{x} \\mathbb{P}(x) $",
+        fontsize=fontsize,
+    )
     img = ax.contourf(xx, yy, ll, levels=100)
-    ax.contour(xx, yy, ll, levels=20, colors="black", linestyles="solid", linewidths=0.51)
-    ax.quiver(xx[::reduce, ::reduce], yy[::reduce, ::reduce], dxx[::reduce, ::reduce], dyy[::reduce, ::reduce])
+    ax.contour(
+        xx, yy, ll, levels=20, colors="black", linestyles="solid", linewidths=0.51
+    )
+    ax.quiver(
+        xx[::reduce, ::reduce],
+        yy[::reduce, ::reduce],
+        dxx[::reduce, ::reduce],
+        dyy[::reduce, ::reduce],
+    )
     if fig is not None:
         divider = make_axes_locatable(ax)
         cax1 = divider.append_axes("right", size="5%", pad=0.05)
@@ -106,8 +148,16 @@ def make_distribution_grad_plot(distr, x_lim=(-5, 5), y_lim=(-5, 5), num=200, re
     return ax
 
 
-def make_training_animation(save_path, dpi=150, fps=60, max_frames=None, fig=None, ax=None, name="default",
-                            **kwargs_grad_plot):
+def make_training_animation(
+    save_path,
+    dpi=150,
+    fps=60,
+    max_frames=None,
+    fig=None,
+    ax=None,
+    name="default",
+    **kwargs_grad_plot,
+):
     save_name = name
     path, dirs, files = next(os.walk(save_path))
     epochs = set()
@@ -149,12 +199,18 @@ def make_training_animation(save_path, dpi=150, fps=60, max_frames=None, fig=Non
         ax.clear()
         ax.set_xlim(*x_lim)
         ax.set_ylim(*y_lim)
-        grad = np.load(os.path.join(save_path, str(epochs[i]) + "_" + name + "_grad.npy"))
+        grad = np.load(
+            os.path.join(save_path, str(epochs[i]) + "_" + name + "_grad.npy")
+        )
         if "energy" in types:
-            energy = np.load(os.path.join(save_path, str(epochs[i]) + "_" + name + "_energy.npy"))
+            energy = np.load(
+                os.path.join(save_path, str(epochs[i]) + "_" + name + "_energy.npy")
+            )
         else:
             energy = None
-        ax = make_grad_plot(grad=grad, e=energy, xy=inputs, ax=ax, iter=i, **kwargs_grad_plot)
+        ax = make_grad_plot(
+            grad=grad, e=energy, xy=inputs, ax=ax, iter=i, **kwargs_grad_plot
+        )
 
     # fig.tight_layout()
 
@@ -162,7 +218,16 @@ def make_training_animation(save_path, dpi=150, fps=60, max_frames=None, fig=Non
     anim.save(os.path.join(save_path, save_name + "_animation.gif"), fps=fps, dpi=dpi)
 
 
-def plot_trajectories(ebm=None, trajectories=None, fig=None, ax=None, x_lim=(-10, 10), save_path=None, name="default"):
+def plot_trajectories(
+    ebm=None,
+    trajectories=None,
+    fig=None,
+    ax=None,
+    x_lim=(-10, 10),
+    save_path=None,
+    name="default",
+    **kwargs_grad_plot,
+):
     assert ebm is not None or trajectories is not None
     if trajectories is None:
         trajectories = ebm.langevin_dynamics(trajectories=True, n_samples=500)
@@ -175,14 +240,12 @@ def plot_trajectories(ebm=None, trajectories=None, fig=None, ax=None, x_lim=(-10
 
     def plot_traj(i):
         ax.clear()
-        _ = make_grad_plot(ebm, x_lim, x_lim, ax=ax)
         ax.set_xlim(*x_lim)
         ax.set_ylim(*x_lim)
-        ax.scatter(trajectories[i, :, 0], trajectories[i, :, 1], s=3, color="white")
+        _ = make_grad_plot(ebm, x_lim, x_lim, ax=ax, iter=i, **kwargs_grad_plot)
+        ax.scatter(trajectories[i, :, 0], trajectories[i, :, 1], s=5, color="black")
 
-    anim = mpl.animation.FuncAnimation(fig, plot_traj, 490)
-    if save_path is None:
-        return fig, ax, anim
-    else:
+    anim = mpl.animation.FuncAnimation(fig, plot_traj, trajectories.shape[0])
+    if save_path is not None:
         anim.save(os.path.join(save_path, name + "_animation.gif"), fps=60, dpi=150)
-        return fig, ax, anim
+    return fig, ax, anim

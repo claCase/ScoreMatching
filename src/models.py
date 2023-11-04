@@ -15,14 +15,16 @@ class SlicedScoreMatching(Model):
     Sliced Score Matching: A Scalable Approach to Density and Score Estimation
     """
 
-    def __init__(self,
-                 hidden_layers: Tuple[int, ...] = (100, 50),
-                 output_dim: int = 2,
-                 activation: str = "relu",
-                 vr=False,
-                 noise_type="gaussian",
-                 anneal_samples=0.,
-                 **kwargs):
+    def __init__(
+            self,
+            hidden_layers: Tuple[int, ...] = (100, 50),
+            output_dim: int = 2,
+            activation: str = "relu",
+            vr=False,
+            noise_type="gaussian",
+            anneal_samples=0.0,
+            **kwargs
+    ):
         super().__init__(**kwargs)
         self.loss_tracker = tf.keras.metrics.Mean(name="score")
         self.hidden_layers = hidden_layers
@@ -31,13 +33,16 @@ class SlicedScoreMatching(Model):
         self.vr = vr
         self.noise_type = noise_type
         self.anneal_samples = anneal_samples
+        self.f = None
 
     def build(self, input_shape):
-        super().build(input_shape)
-        self.f = self.make_score_model(hidden_layers=self.hidden_layers,
-                                       activation=self.activation,
-                                       output_dim=self.output_dim)
+        self.f = self.make_score_model(
+            hidden_layers=self.hidden_layers,
+            activation=self.activation,
+            output_dim=input_shape[-1],
+        )
         self.f.build(input_shape)
+        self.built = True
 
     def call(self, inputs, training=False, mask=None):
         if training:
@@ -58,12 +63,14 @@ class SlicedScoreMatching(Model):
         self.loss_tracker.update_state(loss)
         return {"Score": self.loss_tracker.result()}
 
-    def langevin_dynamics(self,
-                          initial_points=None,
-                          steps=500,
-                          x_lim=(-6, 6),
-                          n_samples=100,
-                          trajectories=False):
+    def langevin_dynamics(
+            self,
+            initial_points=None,
+            steps=500,
+            x_lim=(-6, 6),
+            n_samples=100,
+            trajectories=False,
+    ):
         try:
             in_dim = self.layers[0].input_shape[-1]
         except AttributeError as e:
@@ -75,7 +82,9 @@ class SlicedScoreMatching(Model):
             return 100 / (100 + i)
 
         if initial_points is None:
-            x = tf.random.uniform(minval=x_lim[0], maxval=x_lim[1], shape=(n_samples, in_dim))
+            x = tf.random.uniform(
+                minval=x_lim[0], maxval=x_lim[1], shape=(n_samples, in_dim)
+            )
         else:
             x = initial_points
 
@@ -85,48 +94,60 @@ class SlicedScoreMatching(Model):
 
         for t in range(1, steps):
             a = alpha(t)
-            x = x + 0.5 * a * self.f(x) + tf.math.sqrt(a) * tf.random.normal(shape=(x.shape[0], in_dim))
+            x = (
+                    x
+                    + 0.5 * a * self.f(x)
+                    + tf.math.sqrt(a) * tf.random.normal(shape=(x.shape[0], in_dim))
+            )
             if trajectories:
                 traj[t, :, :] = x.numpy()
         if trajectories:
             return traj
         return x
 
-    def annealed_langevin_dynamics(self,
-                                   initial_points=None,
-                                   steps=500,
-                                   n_samples=100,
-                                   x_lim=(-6, 6),
-                                   sigma_high=2,
-                                   sigma_low=0.1,
-                                   levels=10, e=1.,
-                                   trajectories=False):
+    def annealed_langevin_dynamics(
+            self,
+            initial_points=None,
+            steps=500,
+            n_samples=100,
+            x_lim=(-6, 6),
+            sigma_high=1,
+            sigma_low=0.01,
+            levels=10,
+            e=0.0001,
+            trajectories=False,
+    ):
         try:
             in_dim = self.layers[0].input_shape[-1]
-        except AttributeError as e:
-            raise e
-        except RuntimeError as e:
-            raise e
+        except AttributeError as ae:
+            raise ae
+        except RuntimeError as re:
+            raise re
 
         alphas = tf.linspace(sigma_low, sigma_high, levels)[::-1]
 
         if initial_points is None:
-            x = tf.random.uniform(minval=x_lim[0], maxval=x_lim[1], shape=(n_samples, in_dim))
+            x = tf.random.uniform(
+                minval=x_lim[0], maxval=x_lim[1], shape=(n_samples, in_dim)
+            )
         else:
             assert initial_points.shape[-1] == in_dim
             x = initial_points
 
         if trajectories:
-            traj = np.empty(shape=(steps, n_samples, in_dim))
+            traj = np.empty(shape=(steps * levels + 1, n_samples, in_dim))
             traj[0, :, :] = x
 
         for l in range(len(alphas)):
-            a = e * alphas[l + 1] / alphas[l]
-            for t in range(1, steps):
+            a = e * alphas[l] / alphas[-1]
+            for t in range(0, steps):
+                x = (
+                        x
+                        + 0.5 * a * self(x)
+                        + tf.math.sqrt(a) * tf.random.normal(shape=(x.shape[0], in_dim))
+                )
                 if trajectories:
-                    traj[t, :, :] = x.numpy()
-                    print(traj[t, 0, :])
-                x = x + 0.5 * a * self.f(x) + tf.math.sqrt(a) * tf.random.normal(shape=(x.shape[0], in_dim))
+                    traj[1 + t * l, :, :] = x.numpy()
         if trajectories:
             return traj
         return x
@@ -151,20 +172,32 @@ class EBMSlicedScoreMatching(SlicedScoreMatching):
     Sliced Score Matching: A Scalable Approach to Density and Score Estimation
     """
 
-    def __init__(self,
-                 hidden_layers: Tuple[int, ...] = (100, 50),
-                 activation: str = "relu",
-                 vr=False,
-                 noise_type="gaussian",
-                 anneal_samples=0.,
-                 **kwargs):
-        super().__init__(anneal_samples=anneal_samples, output_dim=1, noise_type=noise_type, vr=vr, **kwargs)
+    def __init__(
+            self,
+            hidden_layers: Tuple[int, ...] = (100, 50),
+            activation: str = "relu",
+            vr=False,
+            noise_type="gaussian",
+            anneal_samples=0.0,
+            **kwargs
+    ):
+        super().__init__(
+            hidden_layers=hidden_layers,
+            activation=activation,
+            anneal_samples=anneal_samples,
+            output_dim=1,
+            noise_type=noise_type,
+            vr=vr,
+            **kwargs
+        )
 
     def build(self, input_shape):
-        super(Model, self).build(input_shape)
-        self.f = self.make_score_model(hidden_layers=self.hidden_layers,
-                                       activation=self.activation)
+        # super(Model, self).build(input_shape)
+        self.f = self.make_score_model(
+            hidden_layers=self.hidden_layers, activation=self.activation
+        )
         self.f.build(input_shape)
+        self.built = True
 
     def call(self, inputs, training=False, mask=None):
         with tf.GradientTape() as tape:
@@ -197,13 +230,20 @@ class EBMSlicedScoreMatching(SlicedScoreMatching):
 
 
 class NoiseConditionalScoreModel(Model):
-    def __init__(self,
-                 sigma=0.5,
-                 hidden_layers: Tuple[int, ...] = (100, 50),
-                 output_dim: int = 2,
-                 activation: str = "relu",
-                 anneal_samples=0.,
-                 **kwargs):
+    """
+    https://arxiv.org/abs/1907.05600
+    Generative Modeling by Estimating Gradients of the Data Distribution
+    """
+
+    def __init__(
+            self,
+            sigma=0.5,
+            hidden_layers: Tuple[int, ...] = (100, 50),
+            output_dim: int = 2,
+            activation: str = "relu",
+            anneal_samples=0.0,
+            **kwargs
+    ):
         super().__init__(**kwargs)
         self.sigma = sigma
         self.loss_tracker = tf.keras.metrics.Mean(name="score")
@@ -222,9 +262,11 @@ class NoiseConditionalScoreModel(Model):
 
     def build(self, input_shape):
         super().build(input_shape)
-        self.f = self.make_score_model(hidden_layers=self.hidden_layers,
-                                       activation=self.activation,
-                                       input_dim=input_shape[-1])
+        self.f = self.make_score_model(
+            hidden_layers=self.hidden_layers,
+            activation=self.activation,
+            input_dim=input_shape[-1],
+        )
         self.f.build(input_shape)
 
     def call(self, inputs, training=False, mask=None):
@@ -239,18 +281,22 @@ class NoiseConditionalScoreModel(Model):
                 grad, e = o
             else:
                 grad = o
-            loss = noise_conditional_score_matching_loss(grad, data, corrupted_samples, self.sigma)
+            loss = noise_conditional_score_matching_loss(
+                grad, data, corrupted_samples, self.sigma
+            )
         grads = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
         self.loss_tracker.update_state(loss)
         return {"Score": self.loss_tracker.result()}
 
-    def langevin_dynamics(self,
-                          initial_points=None,
-                          steps=500,
-                          x_lim=(-6, 6),
-                          n_samples=100,
-                          trajectories=False):
+    def langevin_dynamics(
+            self,
+            initial_points=None,
+            steps=500,
+            x_lim=(-6, 6),
+            n_samples=100,
+            trajectories=False,
+    ):
         try:
             in_dim = self.layers[0].input_shape[-1]
         except AttributeError as e:
@@ -259,10 +305,12 @@ class NoiseConditionalScoreModel(Model):
             raise e
 
         def alpha(i):
-            return 100 / (100 + i)
+            return 1 / (1000 + i)
 
         if initial_points is None:
-            x = tf.random.uniform(minval=x_lim[0], maxval=x_lim[1], shape=(n_samples, in_dim))
+            x = tf.random.uniform(
+                minval=x_lim[0], maxval=x_lim[1], shape=(n_samples, in_dim)
+            )
         else:
             x = initial_points
 
@@ -272,48 +320,62 @@ class NoiseConditionalScoreModel(Model):
 
         for t in range(1, steps):
             a = alpha(t)
-            x = x + 0.5 * a * self.f(x) + tf.math.sqrt(a) * tf.random.normal(shape=(x.shape[0], in_dim))
+            x = (
+                    x
+                    + 0.5 * a * self(x)
+                    + tf.math.sqrt(a) * tf.random.normal(shape=(x.shape[0], in_dim))
+            )
             if trajectories:
                 traj[t, :, :] = x.numpy()
         if trajectories:
             return traj
         return x
 
-    def annealed_langevin_dynamics(self,
-                                   initial_points=None,
-                                   steps=500,
-                                   n_samples=100,
-                                   x_lim=(-6, 6),
-                                   sigma_high=2,
-                                   sigma_low=0.1,
-                                   levels=10, e=1.,
-                                   trajectories=False):
+    def annealed_langevin_dynamics(
+            self,
+            initial_points=None,
+            steps=500,
+            n_samples=100,
+            x_lim=(-6, 6),
+            sigma_high=1,
+            sigma_low=0.01,
+            levels=10,
+            e=0.0001,
+            trajectories=False,
+    ):
         try:
             in_dim = self.layers[0].input_shape[-1]
-        except AttributeError as e:
-            raise e
-        except RuntimeError as e:
-            raise e
+        except AttributeError as ae:
+            raise ae
+        except RuntimeError as re:
+            raise re
 
-        alphas = tf.linspace(sigma_low, sigma_high, levels)[::-1]
+        alphas = tf.exp(
+            tf.linspace(tf.math.log(sigma_low), tf.math.log(sigma_high), levels)
+        )[::-1]
 
         if initial_points is None:
-            x = tf.random.uniform(minval=x_lim[0], maxval=x_lim[1], shape=(n_samples, in_dim))
+            x = tf.random.uniform(
+                minval=x_lim[0], maxval=x_lim[1], shape=(n_samples, in_dim)
+            )
         else:
             assert initial_points.shape[-1] == in_dim
             x = initial_points
 
         if trajectories:
-            traj = np.empty(shape=(steps, n_samples, in_dim))
+            traj = np.empty(shape=(steps * levels + 1, n_samples, in_dim))
             traj[0, :, :] = x
 
         for l in range(len(alphas)):
-            a = e * alphas[l + 1] / alphas[l]
-            for t in range(1, steps):
+            a = e * alphas[l] / alphas[-1]
+            for t in range(0, steps):
+                x = (
+                        x
+                        + 0.5 * a * self(x)
+                        + tf.math.sqrt(a) * tf.random.normal(shape=(x.shape[0], in_dim))
+                )
                 if trajectories:
-                    traj[t, :, :] = x.numpy()
-                    print(traj[t, 0, :])
-                x = x + 0.5 * a * self.f(x) + tf.math.sqrt(a) * tf.random.normal(shape=(x.shape[0], in_dim))
+                    traj[1 + t * l, :, :] = x.numpy()
         if trajectories:
             return traj
         return x
@@ -321,19 +383,24 @@ class NoiseConditionalScoreModel(Model):
 
 class EBMNoiseConditionalScoreModel(NoiseConditionalScoreModel):
     """
-    https://proceedings.mlr.press/v115/song20a.html
-    Sliced Score Matching: A Scalable Approach to Density and Score Estimation
+    https://arxiv.org/abs/1907.05600
+    Generative Modeling by Estimating Gradients of the Data Distribution
     """
 
-    def __init__(self,
-                 sigmas: Union[Tuple, tf.Tensor] = tf.linspace(0.01, 1, 10)[::-1],
-                 hidden_layers: Tuple[int, ...] = (100, 50),
-                 activation: str = "relu",
-                 **kwargs):
-        super().__init__(hidden_layers=hidden_layers, activation=activation, sigma=sigmas, **kwargs)
+    def __init__(
+            self,
+            sigmas: Union[Tuple, tf.Tensor] = tf.linspace(0.01, 1, 10)[::-1],
+            hidden_layers: Tuple[int, ...] = (100, 50),
+            activation: str = "relu",
+            **kwargs
+    ):
+        super().__init__(
+            hidden_layers=hidden_layers, activation=activation, sigma=sigmas, **kwargs
+        )
 
-        self.f = self.make_score_model(hidden_layers=self.hidden_layers,
-                                       activation=self.activation)
+        self.f = self.make_score_model(
+            hidden_layers=self.hidden_layers, activation=self.activation
+        )
 
     @staticmethod
     def make_score_model(hidden_layers, activation, output_dim=1):
