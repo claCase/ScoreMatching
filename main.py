@@ -3,20 +3,22 @@ import matplotlib.pyplot as plt
 from src import models, utils, plotter
 import numpy as np
 import tensorflow as tf
-from tensorflow_probability.python.distributions import (MultivariateNormalTriL,
-                                                         Mixture,
-                                                         Categorical,
-                                                         Logistic,
-                                                         Distribution,
-                                                         MultivariateNormalDiag)
+from tensorflow_probability.python.distributions import (
+    MultivariateNormalTriL,
+    Mixture,
+    Categorical,
+    Logistic,
+    Distribution,
+    MultivariateNormalDiag,
+)
 import argparse
 
-'''mix = Mixture(cat=Categorical(logits=[1, 1]),
+"""mix = Mixture(cat=Categorical(logits=[1, 1]),
               components=[MultivariateNormalDiag([-1., -1.], [.5, .5]),
                           MultivariateNormalDiag([1., 1.], [.5, .5])])
 
 x = mix.sample(3000)
-'''
+"""
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model", default="EBMDSM")
@@ -24,25 +26,33 @@ parser.add_argument("--dataset", default="gaussian_mixture")
 parser.add_argument("--epochs", default=400)
 parser.add_argument("--batch_size", default=500)
 parser.add_argument("--n_samples", default=500)
+parser.add_argument("--plot", action="store_true")
 args = parser.parse_args()
 dataset = args.dataset
 model_type = args.model
 epochs = args.epochs
 batch_size = args.batch_size
 n_samples = args.n_samples
+plot = args.plot
 
 distr = None
 if dataset == "gaussian_mixture":
-    x, y, distr = utils.make_circle_gaussian(n_gaussians=4, radius=2.5, sigma=.9, n_samples=n_samples)
+    x, y, distr = utils.make_circle_gaussian(
+        n_gaussians=4, radius=2.5, sigma=0.9, n_samples=n_samples
+    )
     save_path = os.path.join(os.getcwd(), "figures", "Gaussian Mixture")
 elif dataset == "spiral":
-    x, y = utils.make_spiral_galaxy(n_spirals=4, legnth=2, n_samples=n_samples, noise=0.1)
+    x, y = utils.make_spiral_galaxy(
+        n_spirals=4, legnth=2, n_samples=n_samples, noise=0.1
+    )
     save_path = os.path.join(os.getcwd(), "figures", "Spiral")
 elif dataset == "cross":
     x, y, distr = utils.make_cross_shaped_distribution(n_samples=n_samples)
     save_path = os.path.join(os.getcwd(), "figures", "Cross")
 else:
-    raise NotImplementedError("Datasets must be in ['gaussian_mixture', 'spiral', 'cross']")
+    raise NotImplementedError(
+        "Datasets must be in ['gaussian_mixture', 'spiral', 'cross']"
+    )
 
 if not os.path.exists(save_path):
     os.makedirs(save_path)
@@ -65,55 +75,67 @@ if model_type == "SSM":
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     model = models.SlicedScoreMatching(hidden_layers=(512, 512))
+    _ = model(x)
     model.compile("adam")
-    saver_clbk, save_path1 = utils.save_output_callback(model, xy, save_path, 3, 300, "SSM")
+    saver_clbk, save_path1 = utils.save_output_callback(
+        model, xy, save_path, 3, 300, "SSM"
+    )
     model.fit(x, epochs=epochs, batch_size=3000, callbacks=[saver_clbk])
-    if distr is not None:
-        fig, ax0 = plotter.make_distribution_grad_plot(distr, fig=fig, ax=ax0)
-        ax0.scatter(x[:, 0], x[:, 1], color="black", s=5)
-    plotter.make_training_animation(save_path1, name="sliced_score_matching", dpi=90, fontsize=20, reduce=10,
-                                    fig=fig, ax=ax1)
 
 elif model_type == "EBMSSM":
     save_path = os.path.join(save_path, "Energy Based Sliced Score Matching")
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     model = models.EBMSlicedScoreMatching(hidden_layers=(512, 512))
+    _ = model(x)
     model.compile("adam")
-    saver_clbk, save_path1 = utils.save_output_callback(model, xy, save_path, 3, 300, "EBMSSM")
+    saver_clbk, save_path1 = utils.save_output_callback(
+        model, xy, save_path, 3, 300, "EBMSSM"
+    )
     model.fit(x, epochs=epochs, batch_size=500, callbacks=[saver_clbk])
-    if distr is not None:
-        fig, ax0 = plotter.make_distribution_grad_plot(distr, fig=fig, ax=ax0)
-        ax0.scatter(x[:, 0], x[:, 1], color="black", s=5)
-    plotter.make_training_animation(save_path1, name="ebm_sliced_score_matching", dpi=90, fontsize=20, reduce=10,
-                                    fig=fig, ax=ax1)
+
 elif model_type == "EBMDSM":
     save_path = os.path.join(save_path, "Energy Based Denoising Score Matching")
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     model = models.EBMNoiseConditionalScoreModel(hidden_layers=[512, 100])
-    o = model(x)
+    _ = model(x)
     model.compile("adam")
-    saver_clbk, save_path1 = utils.save_output_callback(model, xy, save_path, 3, 300, "EBM-Denoising")
+    saver_clbk, save_path1 = utils.save_output_callback(
+        model, xy, save_path, 3, 300, "EBM-Denoising"
+    )
     model.fit(x, epochs=epochs, batch_size=1000, callbacks=[saver_clbk])
-    if distr is not None:
-        ax0 = plotter.make_distribution_grad_plot(distr, lim, lim, ax=ax0, fontsize=20)
-        ax0.scatter(x[:100, 0], x[:100, 1], color="black")
-    fig.subplots_adjust(bottom=0.06, top=0.96)
-    plotter.make_training_animation(save_path1, name="ebm_de-noising_animation", dpi=90, fontsize=20, reduce=10,
-                                    fig=fig, ax=ax1)
+
 elif model_type == "DSM":
     save_path = os.path.join(save_path, "Denoising Score Matching")
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     model = models.NoiseConditionalScoreModel(hidden_layers=[512, 100])
-    o = model(x)
+    _ = model(x)
     model.compile("adam")
-    saver_clbk, save_path1 = utils.save_output_callback(model, xy, save_path, 3, 300, "EBM-Denoising")
+    saver_clbk, save_path1 = utils.save_output_callback(
+        model, xy, save_path, 3, 300, "EBM-Denoising"
+    )
     model.fit(x, epochs=epochs, batch_size=1000, callbacks=[saver_clbk])
+else:
+    raise NotImplementedError("Model types implemented are: 'SSM', 'EBMSSM', 'DSM', 'EBMDSM'")
+
+if plot:
     if distr is not None:
         ax0 = plotter.make_distribution_grad_plot(distr, lim, lim, ax=ax0, fontsize=20)
         ax0.scatter(x[:100, 0], x[:100, 1], color="black")
     fig.subplots_adjust(bottom=0.06, top=0.96)
-    plotter.make_training_animation(save_path1, name="ebm_de-noising_animation", dpi=90, fontsize=20, reduce=10,
-                                    fig=fig, ax=ax1)
+    plotter.make_training_animation(
+        save_path1,
+        name=f"{model_type}_training_animation",
+        dpi=90,
+        fontsize=20,
+        reduce=10,
+        fig=fig,
+        ax=ax1,
+    )
+    print("Sampling Trajectories \n")
+    traj = model.annealed_langevin_dynamics(steps=300, e=0.001, sigma_low=0.1, trajectories=True, x_lim=(-2, 2),
+                                            n_samples=500)
+    plotter.plot_trajectories(model, traj[::100], reduce=1, x_lim=(-5, 5), alpha=0.3, cmap="inferno", dpi=90,
+                              distr=distr, save_path=save_path1)
