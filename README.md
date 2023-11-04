@@ -63,7 +63,6 @@ To increase the accuracy of the model the final loss function is weighted in pro
 
 # Results 
 ### Energy Based Sliced Score Matching 
-![Gradient Estimator](https://github.com/claCase/ScoreMatching/blob/master/figures/Sliced%20Score%20Matching/2023-11-02T03_56_44/GradPlot.png)
-![Training Vector Filed Evolution](https://github.com/claCase/ScoreMatching/blob/master/figures/Sliced%20Score%20Matching/2023-11-02T03_56_44/30fps_dark_20fontsize_animation_compressed.gif)
+![Training Vector Filed Evolution](https://github.com/claCase/ScoreMatching/blob/master/figures/Sliced%20Score%20Matching/2023-11-02T03_56_44/sliced_score_matching_2gif_animation.gif)
 
 
