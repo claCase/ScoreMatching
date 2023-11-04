@@ -1,6 +1,6 @@
-Non official implementation of [sliced score matching and denoising score matching](https://arxiv.org/abs/1907.05600) in TensorFlow v2. The basic idea of score matching is to estimate the gradient field of an un-normalized energy function to match the true gradient field of the normalized data generating density function.
+Non-official implementation of [sliced score matching and de-noising score matching](https://arxiv.org/abs/1907.05600) in TensorFlow v2. The basic idea of score matching is to estimate the gradient field of an un-normalized energy function to match the true gradient field of the normalized data generating density function.
 The gradient near sampled points should be close to zero to indicate high probability of sampling. 
-# Scliced Score Matching
+# Sliced Score Matching
 The loss function takes the following form:
 ```math
 \mathcal{L}(\theta) = \mathbb{E}_{\mathbb{P}(x)} [ Tr(\nabla_{x}\bf{s}_{\theta}(x)) + \frac{1}{2} \| \bf{s}_{\theta}(x) \|^{2}_{2} ]
@@ -33,8 +33,8 @@ Tr(\nabla_{x}\bf{s}_{\theta}(x)) = \mathbb{E}_{v \sim \mathbb{P}(v) }[v^\top \na
 
 where $` \mathbb{P}(v) `$ can be a normal distribution $` \mathcal{N}(0,1) `$ or a rademacher distribution. 
 
-# Denoising Score Matching  
-Another way to estimate the gradient is to add noise to the samples and trying to match the gradient of the noise distribution, which is choosen a priori to be gaussian:
+# De-noising Score Matching  
+Another way to estimate the gradient is to add noise to the samples and trying to match the gradient of the noise distribution, which is chosen a priori to be gaussian:
 
 ```math
 q_{\sigma}(\tilde x |x) = \mathcal N(x, \sigma)
@@ -58,7 +58,7 @@ To increase the accuracy of the model the final loss function is weighted in pro
 ```math
 \mathcal L(\theta, \{ \sigma_{i} \}_{i=1}^L) = \frac{1}{L} \sum_{i}^{L} \sigma^2_{i} \mathcal L(\theta, \sigma_{i})
 ```
-### Energy Based Denoising Score Matching
+### Energy Based De-noising Score Matching
 ![Training Vector Filed Evolution](https://github.com/claCase/ScoreMatching/blob/master/figures/Denoising%20Score%20Matching/Gaussian%20Mixture/2023-11-04T03_59_29/ebm_de-noising_animation_animation.gif)
 
 # Results 
