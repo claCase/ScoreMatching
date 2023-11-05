@@ -22,7 +22,7 @@ log(\mathbb{P}_{\theta}(x)) = log(\frac{\bf e^{E_{\theta}(x)}}{\bf Z})
 \Rightarrow \bf E_{\theta}(x) \propto log(\mathbb{P}_{\theta}(x))  
 ```
 
-where $` \bf Z `$ is the partition function (normalizing constant), which does not depend on parameters.
+where $` \bf Z `$ is the partition function (normalizing constant).
 \
 \
 The trace of the hessian matrix $` Tr(\nabla_{x}\bf{s}_{\theta}(x)) `$ can be estimated by the Hutchinson trace estimator:
@@ -61,7 +61,7 @@ To increase the accuracy of the model the final loss function is weighted in pro
 
 # Sampling by Langevin Dynamics
 
-To generate samples from the one can uniformly sample some points in the region of the data manifold, and then update the sampled points in the direction of the gradient predicted by the score model and adding some small noise perturbation: 
+To generate samples from the model one can uniformly sample some points in the region of the data manifold, and then update the sampled points in the direction of the gradient predicted by the score model and add some small noise perturbation to make the trajectory stochastic: 
 
 ```math
 x_{t+1} = x_{t} + \frac{1}{2} \alpha_{t} *  s_{\theta}  (x) + \sqrt{\alpha} \, n
