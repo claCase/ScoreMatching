@@ -74,7 +74,7 @@ Evolution of the estimated vector field of the density score
 ![Training Vector Filed Evolution](https://github.com/claCase/ScoreMatching/blob/master/figures/Denoising%20Score%20Matching/Gaussian%20Mixture/2023-11-04T03_59_29/ebm_de-noising_animation_animation.gif)
 
 Evolution of samples points via annealed Langevin Dynamics 
-![Langevin Sampling](https://github.com/claCase/ScoreMatching/blob/master/figures/Denoising%20Score%20Matching/Gaussian%20Mixture/2023-11-04T03_59_29/default_trajectory_animation.gif)
+![Langevin Sampling](https://github.com/claCase/ScoreMatching/blob/master/figures/Denoising%20Score%20Matching/Gaussian%20Mixture/2023-11-04T03_59_29/traj3_animation.gif)
 
 
 # Results 
